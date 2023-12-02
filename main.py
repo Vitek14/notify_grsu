@@ -5,6 +5,8 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command
 import asyncio
 
+#fdfdfdfdfdf
+
 # Импорт даты чтобы показывать расписание более приятным способом
 from datetime import date, datetime, timedelta
 
@@ -156,7 +158,7 @@ def set_default_preferences(tg_id):
     # result = cursor.fetchall()
     # cursor.commit()
     cursor.close()
-    # return result    
+    # return result
 
 @dp.message(Command("login"))
 async def login_command(message):
@@ -250,7 +252,7 @@ async def start_command(message):
 
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
-    
+
     # Есть повторение в коде. Повторяется где настройки
     result = select_auth_info(message.from_user.id)
 
@@ -418,7 +420,7 @@ async def marks(callback_query):
                     text_lessons = text_lessons + f"{lesson['title']} ({lesson['timeStart']} - {lesson['timeEnd']}) - {lesson['address']}\n"
             else:
                 continue
-    
+
     await callback_query.message.answer(f"{text_lessons}\n{tommorow_lessons}\n{today_lessons}")
 
 
@@ -430,12 +432,10 @@ async def start():
     btn2 = aiogram.types.InlineKeyboardButton(text="Оценки по этому предмету", callback_data="Завтра")
 
     markup.inline_keyboard.append([btn1, btn2])
-    
+
     await bot.send_message(chat_id=624374169, text="Завтра будет <b>Контрольная работа</b> по предмету Информатика!\nДополнительная информация: страницы для подготовки 20-40, задания 1-10 из учебника Абрамяна\nАвтор: Юдин Витовт Валерьевич", reply_markup=markup, parse_mode="HTML")
     await dp.start_polling(bot)
     print("Бот готов к работе")
 
 if __name__ == "__main__":
     asyncio.run(start())
-
-
