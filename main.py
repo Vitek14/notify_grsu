@@ -104,6 +104,18 @@ def auth(user_id, login, password):
         db_connection = sqlite3.connect("user.db", timeout=10.0)
         cursor = db_connection.cursor()
 
+        print(MDL_SSP_AuthToken)
+        print(MDL_SSP_SessID)
+        print(MOODLEID1_)
+        print(MoodleSession)
+        print(TABNUM)
+        print(LANG)
+        print(group_ids[0])
+        print(group_ids[1])
+        print(group_ids[2])
+        # print(group_ids[3])
+        # print(type(user_id))
+
         cursor.execute("SELECT MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession FROM user_data WHERE tg_id=?", (user_id,))
         result = cursor.fetchone()
         if result:
@@ -117,16 +129,15 @@ tabnum=?,
 lang=?,
 study_group=?,
 lab_group_one=?,
-lab_group_two=?,
 faculty_group=?
 WHERE tg_id=?""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], user_id))
         else:
-            cursor.execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], user_id))
+            cursor.execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], user_id))
 
         db_connection.commit()
 
 
-
+# lab_group_two=?,
 
 
 bot = Bot("6764455698:AAHWL7Zs60lWkqo8KdRcCfDs2yrd8YoxmEU")
@@ -185,7 +196,7 @@ async def login_command(message):
         await waiting_message.edit_text(text=text)
         return
 
-    set_default_preferences(user_id)
+    # set_default_preferences(user_id)
 
     await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete")
 
@@ -196,7 +207,7 @@ def select_auth_info(tg_id):
     cursor = db_connection.cursor()
 
     # Получаем данные токена
-    cursor.execute("SELECT username, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession FROM user_data WHERE tg_id=?", (tg_id,))
+    cursor.execute("SELECT username, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, tabnum FROM user_data WHERE tg_id=?", (tg_id,))
     result = cursor.fetchall()
     cursor.close()
     return result
@@ -248,8 +259,6 @@ async def settings(message):
 @dp.message(Command("start"))
 async def start_command(message):
 
-    # start_session = grequests.Session()
-
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
 
@@ -300,6 +309,7 @@ async def user_marks(callback_query):
     MDL_SSP_SessID = user_auth_info[0][3],
     MOODLEID1_ = user_auth_info[0][4],
     MoodleSession = user_auth_info[0][5]
+    TABNUM = user_auth_info[0][6]
 
     with grequests.Session() as session:
         all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
@@ -324,7 +334,7 @@ async def user_marks(callback_query):
 
             request = grequests.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
                 "method": "getPerformanceData",
-                "args[tabnum]": "170783",
+                "args[tabnum]": TABNUM,
                 "args[kdisc]": course_id,
                 "args[semester]": "1",
                 "args[year]": "2023",
@@ -349,8 +359,8 @@ async def user_marks(callback_query):
             if i["SMARK"] == "":
                 continue
 
-            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка {i["SMARK"]} за {i["NPOCEN_KONTRL"]} по теме {i["NUPCONTENT"]}') + "\n"
-            # course_name = i["course_name_ru"]
+            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
+
 
         # Проверяем даёт ли запрос на название предмета ответ
         try:
@@ -359,7 +369,7 @@ async def user_marks(callback_query):
             continue
         text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
 
-    await callback_query.message.answer(text_marks)
+    await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 
 
@@ -433,7 +443,7 @@ async def start():
 
     markup.inline_keyboard.append([btn1, btn2])
 
-    await bot.send_message(chat_id=624374169, text="Завтра будет <b>Контрольная работа</b> по предмету Информатика!\nДополнительная информация: страницы для подготовки 20-40, задания 1-10 из учебника Абрамяна\nАвтор: Юдин Витовт Валерьевич", reply_markup=markup, parse_mode="HTML")
+    await bot.send_message(chat_id=624374169, text="Утепляйтесь! Сегодня более чем на 5 градусов холоднее, чем вчера!", reply_markup=markup, parse_mode="HTML")
     await dp.start_polling(bot)
     print("Бот готов к работе")
 
