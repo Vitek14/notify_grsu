@@ -25,11 +25,12 @@ dp = Dispatcher()
 async def login_command(message):
     # await message.text
     text = message.text.split(" ")
-    if len(text) < 3 or len(text) > 3:
+    if len(text) !=3:
+        print(len(text))
         await message.answer(text="Неправильно введены данные!")
         return
 
-
+    # print("ААА")
     login = text[1]
     password = text[2]
 
@@ -38,6 +39,11 @@ async def login_command(message):
     waiting_message = await bot.send_message(chat_id=message.from_user.id, text="Пробуем войти, это может занять некоторое время ⌛️")
 
     # Функция входа
+    text = auth(user_id, login, password)
+
+    if type(text) == str:
+        await waiting_message.edit_text(text=text)
+        return
 
     await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete")
 
@@ -52,18 +58,70 @@ async def settings(message):
         await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
         return
 
-@dp.message(Command("start"))
+
+def select_auth_info(tg_id):
+    # Подключаемся к базе данных с данными пользователя
+    db_connection = sqlite3.connect("presentation.db", timeout=10.0)
+    cursor = db_connection.cursor()
+
+    # Получаем данные токена
+    cursor.execute("SELECT login, password FROM user WHERE tg_id=?", (tg_id,))
+    result = cursor.fetchall()
+    cursor.close()
+    return result
+
+
+def auth(user_id, login, password):
+    if login != "test" and password != "test":
+        return "Проверьте данные логина и пароля"
+
+    db_connection = sqlite3.connect("presentation.db", timeout=10.0)
+    cursor = db_connection.cursor()
+    cursor.execute("SELECT login, password FROM user WHERE tg_id=?", (user_id,))
+    result = cursor.fetchone()
+    if result:
+        cursor.execute("""UPDATE user SET login=?,
+password=?,
+WHERE tg_id=?""", (login, password, user_id))
+    else:
+        cursor.execute("INSERT INTO user VALUES (?, ?, ?)", (login, password, user_id))
+
+    db_connection.commit()
+
+
+@dp.message(Command("delete_data"))
+async def delete_command(message):
+    result = select_auth_info(message.from_user.id)
+
+    if not result:
+        await message.answer("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
+
+
+    db_connection = sqlite3.connect("presentation.db", timeout=10.0)
+    cursor = db_connection.cursor()
+    cursor.execute("SELECT login, password FROM user WHERE tg_id=?", (message.from_user.id,))
+    result = cursor.fetchone()
+    cursor.execute("""DELETE FROM user WHERE tg_id=?""", (message.from_user.id,))
+
+    db_connection.commit()
+    await message.answer("Ваши данные удалены.")
+
+    # cursor.close()
+
+@dp.message(Command("info"))
 async def start_command(message):
 
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
 
     # Есть повторение в коде. Повторяется где настройки
-    # result = select_auth_info(message.from_user.id)
+    result = select_auth_info(message.from_user.id)
 
-    # if not result:
-    #     await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
-    #     return
+    if not result:
+        await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
+
 
     # info = get_web_user_info(result)
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
@@ -79,8 +137,7 @@ async def start_command(message):
 Факультет: Физико-технический факультет
 Специальность: Информационно-измерительные приборы и системы
 EMAIL: example_email@student.grsu.by
-Группа: СДП-""", reply_markup=markup, protect_content=True)
-
+Группа: СДП-ИИПС""", reply_markup=markup, protect_content=True)
 
 @dp.callback_query(F.data == "Оценки")
 async def user_marks(callback_query):
@@ -162,60 +219,19 @@ async def marks(callback_query):
     print(callback_query.message.chat.id)
     await callback_query.answer(text="Производим запросы...")
 
-    group_info = select_group_info(callback_query.from_user.id)
+    # group_info = select_group_info(callback_query.from_user.id)
 
-    study_group = group_info[0][0]
-    lab_group_one = group_info[0][1]
-    lab_group_two = group_info[0][2]
-    faculty_group = group_info[0][3]
-    with grequests.Session() as session:
-        group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
-    json_group_schedule = json.loads(group_schedule.text)
+    # study_group = group_info[0][0]
+    # lab_group_one = group_info[0][1]
+    # lab_group_two = group_info[0][2]
+    # faculty_group = group_info[0][3]
+    # with grequests.Session() as session:
+    #     group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
+    # json_group_schedule = json.loads(group_schedule.text)
 
     print("Заверешена загрузка")
 
-    today_raw = datetime.today() # .strftime('%Y-%m-%d')
-    yesterday_raw = today_raw - timedelta(1)
-    tommorow_raw = today_raw + timedelta(1)
-
-    today = today_raw.strftime('%Y-%m-%d')
-    yesterday = yesterday_raw.strftime('%Y-%m-%d')
-    tommorow = tommorow_raw.strftime('%Y-%m-%d')
-
-    text_lessons = ""
-    today_lessons = ""
-    tommorow_lessons = ""
-    date_counter = 0
-    for item in json_group_schedule["days"]:
-        print(item["date"])
-        if item["date"] == today:
-            # text_lessons = text_lessons + "\n\n" + "СЕГОДНЯ" + "\n"
-            today_lessons = today_lessons + "\n\n" + "СЕГОДНЯ" + "\n"
-            date_counter = 2
-        elif item["date"] == yesterday:
-            text_lessons = text_lessons + "\n\n" + "Вчера" + "\n"
-            date_counter = 1
-        elif item["date"] == tommorow:
-            # text_lessons = text_lessons + "\n\n" + "Завтра" + "\n"
-            tommorow_lessons = tommorow_lessons + "\n\n" + "Завтра" + "\n"
-            date_counter = 3
-        else:
-            text_lessons = text_lessons + "\n\n" + item["date"] + "\n"
-            date_counter = 0
-
-        # Перебор для уроков
-        for lesson in item["lessons"]:
-            if (lesson["subgroup"]["id"] == lab_group_one) or (lesson["subgroup"]["id"] == lab_group_two) or (lesson["subgroup"]["id"] == faculty_group) or (lesson["subgroup"]["id"] == "0"):
-                if date_counter == 2:
-                    today_lessons = today_lessons + f"{lesson['title']} ({lesson['timeStart']} - {lesson['timeEnd']}) - {lesson['address']}\n"
-                elif date_counter == 3:
-                    tommorow_lessons = tommorow_lessons + f"{lesson['title']} ({lesson['timeStart']} - {lesson['timeEnd']}) - {lesson['address']}\n"
-                else:
-                    text_lessons = text_lessons + f"{lesson['title']} ({lesson['timeStart']} - {lesson['timeEnd']}) - {lesson['address']}\n"
-            else:
-                continue
-
-    await callback_query.message.answer(f"{text_lessons}\n{tommorow_lessons}\n{today_lessons}")
+    await callback_query.message.answer(f"авва")
 
 
 async def start():
