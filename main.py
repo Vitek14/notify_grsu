@@ -140,7 +140,7 @@ WHERE tg_id=?""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1
 # lab_group_two=?,
 
 
-bot = Bot("6764455698:AAHWL7Zs60lWkqo8KdRcCfDs2yrd8YoxmEU")
+bot = Bot("6315468656:AAElByUicc2WKyoydPfj1yvhsJfGhYAMrf4")
 
 dp = Dispatcher()
 
@@ -434,18 +434,23 @@ async def marks(callback_query):
     await callback_query.message.answer(f"{text_lessons}\n{tommorow_lessons}\n{today_lessons}")
 
 
+@dp.message(Command("schedule"))
+async def schedule_command(message):
+    await message.answer(text=f"<b>ЗАВТРА</b>:\nОсновы права(сем.занятие) - 10.05 - 11.30 на Ожешко, 22 каб. 122\n\n<b>Вторник:</b>\nИнженерная графика(практ.зан) - 08.30 - 09.55 на БЛК, 5 каб. 206\nИнженерная графика(практ.зан) - 10.05 - 11.30 на БЛК, 5 каб. 206\nМатематика(практ.зан) - 11.40 - 13.05 на БЛК, 5 каб. 408\n\n<b>Среда:</b>\nИнформатика(лаб) - 08.30 - 09.55 на БЛК, 5 каб. 212\nИнформатика(лаб) - 10.05 - 11.30 на БЛК, 5 каб. 212\n\n<b>Четверг:</b>\nИностранный язык(практ. зан) - 08.30 - 09.55 на БЛК, 5 каб. 305\nИностранный язык(практ. зан) - 10.05 - 11.30 на БЛК, 5 каб. 305\n\n<b>Пятница:</b>\nФизика(лекция) - 08.30 - 09.55 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 10.05 - 11.30 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 11.40 - 13.05 на Ожешко, 22 каб. 122\n", parse_mode="HTML")
+
 async def start():
     # bot = aiogram.Bot("6764455698:AAHWL7Zs60lWkqo8KdRcCfDs2yrd8YoxmEU")
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
-    btn1 = aiogram.types.InlineKeyboardButton(text="Это неверная информация", callback_data="Сегодня")
+    btn1 = aiogram.types.InlineKeyboardButton(text="Подробнее", callback_data="Сегодня")
     btn2 = aiogram.types.InlineKeyboardButton(text="Оценки по этому предмету", callback_data="Завтра")
 
     markup.inline_keyboard.append([btn1, btn2])
 
-    await bot.send_message(chat_id=624374169, text="Утепляйтесь! Сегодня более чем на 5 градусов холоднее, чем вчера!", reply_markup=markup, parse_mode="HTML")
-    await dp.start_polling(bot)
     print("Бот готов к работе")
+
+    # await bot.send_message(chat_id=624374169, text="", reply_markup=markup, parse_mode="HTML")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(start())
