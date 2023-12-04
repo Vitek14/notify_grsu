@@ -45,18 +45,7 @@ async def login_command(message):
         await waiting_message.edit_text(text=text)
         return
 
-    await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete")
-
-
-
-@dp.message(Command("settings"))
-async def settings(message):
-    return
-    result = select_auth_info(message.from_user.id)
-
-    if not result:
-        await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
-        return
+    await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete_data")
 
 
 def select_auth_info(tg_id):
@@ -109,6 +98,25 @@ async def delete_command(message):
 
     # cursor.close()
 
+@dp.message(Command("settings"))
+async def settings_command(message):
+    await message.answer("Вы сейчас находитесь в демонстрационном режиме, поэтому настройки недоступны.")
+
+@dp.message(Command("start"))
+async def help_command(message):
+    await message.answer("Привет, я телеграмм-бот для организации твоего учебного времени! Я буду тебя оповещать о новых оценках, изменении в расписании и многом другом! Ты также можешь самостоятельно это всё просматривать.\n*Демонстрационный режим*\n<b>Введите /login test test чтобы войти в систему</b>", parse_mode="HTML")
+
+@dp.message(Command("feedback"))
+async def feedback_command(message):
+
+    text = message.text.split(" ")
+    if len(text) < 1:
+        await message.answer(text="Введите отзыв который вы хотите отправить!")
+        return
+
+    await message.answer("Спасибо, вы помогаете нам стать лучше!")
+    await bot.send_message(chat_id=624374169, text=message.text)
+
 @dp.message(Command("info"))
 async def start_command(message):
 
@@ -143,74 +151,34 @@ EMAIL: example_email@student.grsu.by
 async def user_marks(callback_query):
     await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...")
 
+# Есть повторение в коде. Повторяется где настройки
+    result = select_auth_info(callback_query.from_user.id)
 
-    user_auth_info = select_auth_info(callback_query.from_user.id)
+    if not result:
+        await callback_query.message.answer("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
 
-    MDL_SSP_AuthToken =  user_auth_info[0][2],
-    MDL_SSP_SessID = user_auth_info[0][3],
-    MOODLEID1_ = user_auth_info[0][4],
-    MoodleSession = user_auth_info[0][5]
-    TABNUM = user_auth_info[0][6]
+    await callback_query.message.answer(f"""
+Математика:
+<b>8</b> за 15.11.2023(Контрольное занятие)
+<b>10</b> за 01.12.2023(Опрос)
 
-    with grequests.Session() as session:
-        all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getCoursesData"
-        }, cookies={
-            "MDL_SSP_AuthToken": user_auth_info[0][2],
-            "MDL_SSP_SessID": user_auth_info[0][3],
-            "MOODLEID1_": user_auth_info[0][4],
-            "MoodleSession": user_auth_info[0][5]
-        })
+Информатика:
+<b>10</b> за 14.11.2023(Опрос)
 
-        print(all_courses)
+Инженерная графика:
+<b>8</b> за 16.11.2023(Контрольное занятие)
 
-        all_courses_json = json.loads(all_courses.text)["1"]["1"]
+Физика:
+<b>9</b> за 14.11.2023(Опрос)
+<b>8</b> за 16.11.2023(Опрос)
 
+Химия:
+<b>7</b> за 01.12.2023(Контрольное занятие)
 
-        text_marks = ""
-        requests = []
-        for course in all_courses_json:
-            course_id = course["kdisc"]
-
-
-            request = grequests.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-                "method": "getPerformanceData",
-                "args[tabnum]": TABNUM,
-                "args[kdisc]": course_id,
-                "args[semester]": "1",
-                "args[year]": "2023",
-                "args[lang]": "6"
-            }, headers={
-                "Connection":"keep-alive",
-                "Cookies": f"MoodleSession={MoodleSession}; MDL_SSP_AuthToken={MDL_SSP_AuthToken}; MDL_SSP_SessID={MDL_SSP_SessID}, MOODLEID1_={MOODLEID1_}"
-            })
-
-            requests.append(request)
-
-        responses = grequests.map(requests, stream=True)
-
-
-    for item in responses:
-        json_course = json.loads(item.text)
-
-
-
-        all_marks = ""
-        for i in json_course:
-            if i["SMARK"] == "":
-                continue
-
-            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
-
-
-        # Проверяем даёт ли запрос на название предмета ответ
-        try:
-            course_name = json_course[0]["NDISC"]
-        except:
-            continue
-        text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
-
-    await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
+Иностранный язык(Английский язык):
+<b>10</b> за 12.11.2023(Опрос)
+<b>10</b> за 14.11.2023(Опрос)""", parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 
 
@@ -219,19 +187,15 @@ async def marks(callback_query):
     print(callback_query.message.chat.id)
     await callback_query.answer(text="Производим запросы...")
 
-    # group_info = select_group_info(callback_query.from_user.id)
+# Есть повторение в коде. Повторяется где настройки
+    result = select_auth_info(callback_query.from_user.id)
 
-    # study_group = group_info[0][0]
-    # lab_group_one = group_info[0][1]
-    # lab_group_two = group_info[0][2]
-    # faculty_group = group_info[0][3]
-    # with grequests.Session() as session:
-    #     group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
-    # json_group_schedule = json.loads(group_schedule.text)
+    if not result:
+        await callback_query.message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
 
-    print("Заверешена загрузка")
-
-    await callback_query.message.answer(f"авва")
+    await callback_query.message.answer(text=f"<b>Понедельник</b>:\nОсновы права(сем.занятие) - 10.05 - 11.30 на Ожешко, 22 каб. 122\n\n<b>Вторник:</b>\nИнженерная графика(практ.зан) - 08.30 - 09.55 на БЛК, 5 каб. 206\nИнженерная графика(практ.зан) - 10.05 - 11.30 на БЛК, 5 каб. 206\nМатематика(практ.зан) - 11.40 - 13.05 на БЛК, 5 каб. 408\n\n<b>Среда:</b>\nИнформатика(лаб) - 08.30 - 09.55 на БЛК, 5 каб. 212\nИнформатика(лаб) - 10.05 - 11.30 на БЛК, 5 каб. 212\n\n<b>Четверг:</b>\nИностранный язык(практ. зан) - 08.30 - 09.55 на БЛК, 5 каб. 305\nИностранный язык(практ. зан) - 10.05 - 11.30 на БЛК, 5 каб. 305\n\n<b>Пятница:</b>\nФизика(лекция) - 08.30 - 09.55 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 10.05 - 11.30 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 11.40 - 13.05 на Ожешко, 22 каб. 122\n", parse_mode="HTML")
+# .message.answer(f"авва")
 
 
 async def start():
