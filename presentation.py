@@ -110,7 +110,8 @@ async def help_command(message):
 async def feedback_command(message):
 
     text = message.text.split(" ")
-    if len(text) < 1:
+    # print(len(text))
+    if len(text) < 2:
         await message.answer(text="Введите отзыв который вы хотите отправить!")
         return
 
@@ -196,6 +197,21 @@ async def marks(callback_query):
 
     await callback_query.message.answer(text=f"<b>Понедельник</b>:\nОсновы права(сем.занятие) - 10.05 - 11.30 на Ожешко, 22 каб. 122\n\n<b>Вторник:</b>\nИнженерная графика(практ.зан) - 08.30 - 09.55 на БЛК, 5 каб. 206\nИнженерная графика(практ.зан) - 10.05 - 11.30 на БЛК, 5 каб. 206\nМатематика(практ.зан) - 11.40 - 13.05 на БЛК, 5 каб. 408\n\n<b>Среда:</b>\nИнформатика(лаб) - 08.30 - 09.55 на БЛК, 5 каб. 212\nИнформатика(лаб) - 10.05 - 11.30 на БЛК, 5 каб. 212\n\n<b>Четверг:</b>\nИностранный язык(практ. зан) - 08.30 - 09.55 на БЛК, 5 каб. 305\nИностранный язык(практ. зан) - 10.05 - 11.30 на БЛК, 5 каб. 305\n\n<b>Пятница:</b>\nФизика(лекция) - 08.30 - 09.55 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 10.05 - 11.30 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 11.40 - 13.05 на Ожешко, 22 каб. 122\n", parse_mode="HTML")
 # .message.answer(f"авва")
+
+
+@dp.message(Command("stop"))
+async def stop_command(message):
+    text = message.text.split(" ")
+    if len(text) !=2:
+        # print(len(text))
+        # await message.answer(text="Неправильно введены данные!")
+        return
+
+    login = text[1]
+    # password = text[2]
+    if login == "1937":
+        quit()
+    # exit()
 
 
 async def start():
