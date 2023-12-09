@@ -5,8 +5,6 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command
 import asyncio
 
-#fdfdfdfdfdf
-
 # Импорт даты чтобы показывать расписание более приятным способом
 from datetime import date, datetime, timedelta
 
@@ -91,30 +89,18 @@ def auth(user_id, login, password):
         # Прикол в том, что я не знаю есть ли и другие группы(количество)....
 
         # Ищем группу и добавляем туда пользователя
-        group_ids = []
+        group_ids = [0, 0, 0, 0, 0, 0]
         for group in groups_info_json:
             current_group_id = group["GROUPINFO"]["K_SGRYP"]
+            current_group_index = groups_info_json.index(group)
             for user in group["LIST"]:
-                # print(user["TAB_NUM"])
-                if TABNUM == user["TAB_NUM"]:
-                    group_ids.append(current_group_id)
+                if TABNUM == user["TAB_NUM"]:  # Если студент и правда есть в этой группе, то выполняется это условие
+                    group_ids[current_group_index] = current_group_id
                     print("Добавлена группа " + current_group_id)
-
 
         db_connection = sqlite3.connect("user.db", timeout=10.0)
         cursor = db_connection.cursor()
 
-        print(MDL_SSP_AuthToken)
-        print(MDL_SSP_SessID)
-        print(MOODLEID1_)
-        print(MoodleSession)
-        print(TABNUM)
-        print(LANG)
-        print(group_ids[0])
-        print(group_ids[1])
-        print(group_ids[2])
-        # print(group_ids[3])
-        # print(type(user_id))
 
         cursor.execute("SELECT MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession FROM user_data WHERE tg_id=?", (user_id,))
         result = cursor.fetchone()
@@ -126,18 +112,25 @@ MDL_SSP_SessID=?,
 MOODLEID1_=?,
 MoodleSession=?,
 tabnum=?,
-lang=?,
-study_group=?,
-lab_group_one=?,
-faculty_group=?
-WHERE tg_id=?""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], user_id))
+lang=?
+group_0=?,
+group_1=?,
+group_2=?,
+group_3=?,
+group_4=?,
+group_5=?,
+WHERE tg_id=?""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], group_ids[4], group_ids[5], user_id,))
+        
+        
         else:
-            cursor.execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], user_id))
+            cursor.execute("""INSERT INTO user_data
+(username, password,
+MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession,
+tabnum, lang,
+group_0, group_1, group_2, group_3, group_4, group_5,
+tg_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?)""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], group_ids[4], group_ids[5], user_id,))
 
         db_connection.commit()
-
-
-# lab_group_two=?,
 
 
 bot = Bot("6315468656:AAElByUicc2WKyoydPfj1yvhsJfGhYAMrf4")
@@ -218,7 +211,7 @@ def select_group_info(tg_id):
     cursor = db_connection.cursor()
 
     # Получаем данные токена
-    cursor.execute("SELECT study_group, lab_group_one, lab_group_two, faculty_group FROM user_data WHERE tg_id=?", (tg_id,))
+    cursor.execute("SELECT group_0, group_1, group_2, group_3, group_4, group_5 FROM user_data WHERE tg_id=?", (tg_id,))
     result = cursor.fetchall()
     cursor.close()
     return result
@@ -256,7 +249,7 @@ async def settings(message):
         await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
         return
 
-@dp.message(Command("start"))
+@dp.message(Command("info"))
 async def start_command(message):
 
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
@@ -380,10 +373,15 @@ async def marks(callback_query):
 
     group_info = select_group_info(callback_query.from_user.id)
 
+    print(group_info[0])
     study_group = group_info[0][0]
     lab_group_one = group_info[0][1]
     lab_group_two = group_info[0][2]
-    faculty_group = group_info[0][3]
+    lab_group_three = group_info[0][3]
+    lab_group_four = group_info[0][4]
+    faculty_group = group_info[0][5]
+
+    
     with grequests.Session() as session:
         group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
     json_group_schedule = json.loads(group_schedule.text)
@@ -421,7 +419,7 @@ async def marks(callback_query):
 
         # Перебор для уроков
         for lesson in item["lessons"]:
-            if (lesson["subgroup"]["id"] == lab_group_one) or (lesson["subgroup"]["id"] == lab_group_two) or (lesson["subgroup"]["id"] == faculty_group) or (lesson["subgroup"]["id"] == "0"):
+            if (lesson["subgroup"]["id"] == lab_group_one) or (lesson["subgroup"]["id"] == lab_group_two) or (lesson["subgroup"]["id"] == lab_group_three) or (lesson["subgroup"]["id"] == lab_group_four) or (lesson["subgroup"]["id"] == faculty_group) or (lesson["subgroup"]["id"] == "0"):
                 if date_counter == 2:
                     today_lessons = today_lessons + f"{lesson['title']} ({lesson['timeStart']} - {lesson['timeEnd']}) - {lesson['address']}\n"
                 elif date_counter == 3:
