@@ -5,6 +5,11 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command
 import asyncio
 
+# Импорт функций
+from functions.auth import auth
+from functions.select_info import select_auth_info, select_group_info
+
+
 # Импорт даты чтобы показывать расписание более приятным способом
 from datetime import date, datetime, timedelta
 
@@ -17,122 +22,6 @@ import json
 import re
 CLEANR = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
-# Сессия requests
-# session = grequests.Session()
-
-# ПОМЕНЯТЬ!!!
-tabnum = "170783"
-
-def auth(user_id, login, password):
-
-    # Для безопасного соединения, а также автоматического закрытия сессии
-    with grequests.Session() as session:
-
-
-        # Получаем токен для нормальной работы
-        before_auth_page = session.get('https://edu.grsu.by/login')
-        before_html = before_auth_page.text
-        AuthState = before_html.split('name="AuthState" value="')[1].split('"')[0]
-
-        data = {
-            "username": login,
-            "password": password,
-            "AuthState": AuthState
-        }
-
-        response = session.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data)
-
-        # Пытаемся найти значение токена пользователя, иначе возвращаем ему ошибку!
-
-        try:
-            SAMLResponse = response.text.split('name="SAMLResponse" value="')[1].split('"')[0]
-        except:
-            text = "Ошибка! Видимо ваши прекрасные ручки ошиблись и написали не тот логин или пароль. А может сайт решил прилечь на некоторое время... Мы не знаем!"
-            return text
-
-
-        main_auth_response = session.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
-            "SAMLResponse": SAMLResponse,
-            "RelayState": "https://edu.grsu.by/login/index.php"
-        })
-
-        # all_courses_json = json.loads(main_auth_response.text)["1"]["1"]
-
-        cookies = session.cookies.get_dict()
-
-        MDL_SSP_AuthToken = cookies["MDL_SSP_AuthToken"]
-        MDL_SSP_SessID = cookies["MDL_SSP_SessID"]
-        MOODLEID1_ = cookies["MOODLEID1_"]
-        MoodleSession = cookies["MoodleSession"]
-
-
-        # Конец входа
-
-        info_about_student = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getEmployeesData"
-        })
-
-        json_info = json.loads(info_about_student.text)
-
-        useful_info = json_info["userInfo"]
-
-        # Сохраняем tabnum и язык
-        TABNUM = json_info["tabnum"]
-        LANG = useful_info["LANG"]
-
-        groups_info = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getGroups"
-        })
-
-        groups_info_json = json.loads(groups_info.text)
-
-        # Прикол в том, что я не знаю есть ли и другие группы(количество)....
-
-        # Ищем группу и добавляем туда пользователя
-        group_ids = [0, 0, 0, 0, 0, 0]
-        for group in groups_info_json:
-            current_group_id = group["GROUPINFO"]["K_SGRYP"]
-            current_group_index = groups_info_json.index(group)
-            for user in group["LIST"]:
-                if TABNUM == user["TAB_NUM"]:  # Если студент и правда есть в этой группе, то выполняется это условие
-                    group_ids[current_group_index] = current_group_id
-                    print("Добавлена группа " + current_group_id)
-
-        db_connection = sqlite3.connect("user.db", timeout=10.0)
-        cursor = db_connection.cursor()
-
-
-        cursor.execute("SELECT MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession FROM user_data WHERE tg_id=?", (user_id,))
-        result = cursor.fetchone()
-        if result:
-            cursor.execute("""UPDATE user_data SET username=?,
-password=?,
-MDL_SSP_AuthToken=?,
-MDL_SSP_SessID=?,
-MOODLEID1_=?,
-MoodleSession=?,
-tabnum=?,
-lang=?
-group_0=?,
-group_1=?,
-group_2=?,
-group_3=?,
-group_4=?,
-group_5=?,
-WHERE tg_id=?""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], group_ids[4], group_ids[5], user_id,))
-        
-        
-        else:
-            cursor.execute("""INSERT INTO user_data
-(username, password,
-MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession,
-tabnum, lang,
-group_0, group_1, group_2, group_3, group_4, group_5,
-tg_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?)""", (login, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, TABNUM, LANG, group_ids[0], group_ids[1], group_ids[2], group_ids[3], group_ids[4], group_ids[5], user_id,))
-
-        db_connection.commit()
-
-
 bot = Bot("6315468656:AAElByUicc2WKyoydPfj1yvhsJfGhYAMrf4")
 
 dp = Dispatcher()
@@ -142,13 +31,11 @@ dp = Dispatcher()
 async def agree_command(message):
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
-
-
     btn1 = aiogram.types.InlineKeyboardButton(text="Я согласен", callback_data="Согласие")
 
     markup.inline_keyboard.append([btn1])
 
-    await message.answer(text="Нажимая кнопку ниже, вы соглашаетесь с тем, что бот и разработчик смогут видеть, анализировать и использовать личные данные(логин, пароль, ваши данные об оценках, ваше имя, фамилия, отчество, а также другие данные)", protect_content=True, reply_markup=markup)
+    await message.answer(text="Нажимая кнопку ниже, вы соглашаетесь с тем, что бот и разработчик смогут видеть, анализировать и использовать личные данные(логин, пароль, ваши данные об оценках, ваше имя, фамилия, отчество, а также другие личные данные)", protect_content=True, reply_markup=markup)
 
 
 def set_default_preferences(tg_id):
@@ -171,10 +58,9 @@ async def login_command(message):
     if len(text) < 3 or len(text) > 3:
         await message.answer(text="Неправильно введены данные!")
         return
-
-
     login = text[1]
     password = text[2]
+
 
     user_id = message.from_user.id
     await message.delete()
@@ -193,28 +79,6 @@ async def login_command(message):
 
     await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete")
 
-
-def select_auth_info(tg_id):
-    # Подключаемся к базе данных с данными пользователя
-    db_connection = sqlite3.connect("user.db", timeout=10.0)
-    cursor = db_connection.cursor()
-
-    # Получаем данные токена
-    cursor.execute("SELECT username, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, tabnum FROM user_data WHERE tg_id=?", (tg_id,))
-    result = cursor.fetchall()
-    cursor.close()
-    return result
-
-
-def select_group_info(tg_id):
-    db_connection = sqlite3.connect("user.db", timeout=10.0)
-    cursor = db_connection.cursor()
-
-    # Получаем данные токена
-    cursor.execute("SELECT group_0, group_1, group_2, group_3, group_4, group_5 FROM user_data WHERE tg_id=?", (tg_id,))
-    result = cursor.fetchall()
-    cursor.close()
-    return result
 
 def get_web_user_info(user_auth_info):
     with grequests.Session() as sess:
@@ -296,7 +160,8 @@ async def user_marks(callback_query):
     await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...")
 
 
-    user_auth_info = select_auth_info(callback_query.from_user.id)
+    user_id = callback_query.from_user.id
+    user_auth_info = select_auth_info(user_id)
 
     MDL_SSP_AuthToken =  user_auth_info[0][2],
     MDL_SSP_SessID = user_auth_info[0][3],
@@ -314,13 +179,14 @@ async def user_marks(callback_query):
             "MoodleSession": user_auth_info[0][5]
         })
 
-        print(all_courses)
-
+        # Тут получили какие предметы на специальности
         all_courses_json = json.loads(all_courses.text)["1"]["1"]
 
 
         text_marks = ""
         requests = []
+
+        # Создание списка с запросами(requests) на каждый предмет, чтобы потом быстро получить данные о каждом предмете на специальности
         for course in all_courses_json:
             course_id = course["kdisc"]
 
@@ -342,26 +208,56 @@ async def user_marks(callback_query):
         responses = grequests.map(requests, stream=True)
 
 
+    
+    # задаем переменные с данными об оценках
+    # student_subject = "Математика"
+    # student_marks = [6, 9, 10, 6, 7]
+    # student_marks_dates = ["11-10", "16-10", "04-11", "16-11", "02-12"]
+    # user_id = 1
+    # # создаем список кортежей с данными
+    
+    # Это уже парсинг каждого предмета
+
+    db = sqlite3.connect("user.db")
+    cursor = db.cursor()
     for item in responses:
         json_course = json.loads(item.text)
 
 
-
         all_marks = ""
+        # student_marks = []  # Аналог all_marks, потом надо убрать all_marks, если с student_marks будет нормально работать
+
+        student_marks = []
+        student_marks_dates = []
+
+        
+
+        
         for i in json_course:
             if i["SMARK"] == "":
                 continue
-
+            student_marks.append(i["SMARK"])
+            student_marks_dates.append(i["DATE_ACADEMIC"])
             all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
 
 
         # Проверяем даёт ли запрос на название предмета ответ
         try:
-            course_name = json_course[0]["NDISC"]
+            course_name = json_course[0]["NDISC"]  # Убрать
+            student_subject = json_course[0]["NDISC"]  
         except:
             continue
+
+
+        data = [(student_subject, student_marks[i], student_marks_dates[i], user_id) for i in range(len(student_marks))]
+        # вставляем все данные об оценках в таблицу grades одним запросом
+        cursor.executemany("INSERT INTO grades (subject, mark, date, user_id) VALUES (?, ?, ?, ?)", data)
+   
+
         text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
 
+    db.commit()
+    db.close()
     await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 
@@ -437,15 +333,19 @@ async def schedule_command(message):
     await message.answer(text=f"<b>ЗАВТРА</b>:\nОсновы права(сем.занятие) - 10.05 - 11.30 на Ожешко, 22 каб. 122\n\n<b>Вторник:</b>\nИнженерная графика(практ.зан) - 08.30 - 09.55 на БЛК, 5 каб. 206\nИнженерная графика(практ.зан) - 10.05 - 11.30 на БЛК, 5 каб. 206\nМатематика(практ.зан) - 11.40 - 13.05 на БЛК, 5 каб. 408\n\n<b>Среда:</b>\nИнформатика(лаб) - 08.30 - 09.55 на БЛК, 5 каб. 212\nИнформатика(лаб) - 10.05 - 11.30 на БЛК, 5 каб. 212\n\n<b>Четверг:</b>\nИностранный язык(практ. зан) - 08.30 - 09.55 на БЛК, 5 каб. 305\nИностранный язык(практ. зан) - 10.05 - 11.30 на БЛК, 5 каб. 305\n\n<b>Пятница:</b>\nФизика(лекция) - 08.30 - 09.55 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 10.05 - 11.30 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 11.40 - 13.05 на Ожешко, 22 каб. 122\n", parse_mode="HTML")
 
 async def start():
-    # bot = aiogram.Bot("6764455698:AAHWL7Zs60lWkqo8KdRcCfDs2yrd8YoxmEU")
-    markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
-
-    btn1 = aiogram.types.InlineKeyboardButton(text="Подробнее", callback_data="Сегодня")
-    btn2 = aiogram.types.InlineKeyboardButton(text="Оценки по этому предмету", callback_data="Завтра")
-
-    markup.inline_keyboard.append([btn1, btn2])
 
     print("Бот готов к работе")
+
+    db_connection = sqlite3.connect("user.db", timeout=10.0)
+    cursor = db_connection.cursor()
+
+    # Получаем данные токена
+    cursor.execute("SELECT subject, mark, date FROM grades WHERE user_id=624374169 AND subject='Математика'")
+    # cursor.execute("INSERT INTO user_preferences(user_id) VALUES(?)", (tg_id))
+    result = cursor.fetchall()
+    print(result)
+    # cursor.commit()
+    cursor.close()
 
     # await bot.send_message(chat_id=624374169, text="", reply_markup=markup, parse_mode="HTML")
     await dp.start_polling(bot)
