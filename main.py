@@ -8,6 +8,7 @@ import asyncio
 # Импорт функций
 from functions.auth import auth
 from functions.select_info import select_auth_info, select_group_info
+from settings import API_KEY, DB_PASSWORD
 
 
 # Импорт даты чтобы показывать расписание более приятным способом
@@ -22,7 +23,7 @@ import json
 import re
 CLEANR = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
-bot = Bot("6315468656:AAElByUicc2WKyoydPfj1yvhsJfGhYAMrf4")
+bot = Bot(API_KEY)
 
 dp = Dispatcher()
 
@@ -220,6 +221,13 @@ async def user_marks(callback_query):
 
     db = sqlite3.connect("user.db")
     cursor = db.cursor()
+
+    cursor.execute("SELECT subject, mark, date FROM grades WHERE user_id=624374169")
+    result = cursor.fetchall()
+    if result != 0:
+        cursor.execute("DELETE FROM grades WHERE user_id=624374169")
+
+    marks = []
     for item in responses:
         json_course = json.loads(item.text)
 
@@ -230,17 +238,6 @@ async def user_marks(callback_query):
         student_marks = []
         student_marks_dates = []
 
-        
-
-        
-        for i in json_course:
-            if i["SMARK"] == "":
-                continue
-            student_marks.append(i["SMARK"])
-            student_marks_dates.append(i["DATE_ACADEMIC"])
-            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
-
-
         # Проверяем даёт ли запрос на название предмета ответ
         try:
             course_name = json_course[0]["NDISC"]  # Убрать
@@ -248,18 +245,39 @@ async def user_marks(callback_query):
         except:
             continue
 
+        for i in json_course:
+            if i["SMARK"] == "":
+                continue
+            student_marks.append(i["SMARK"])
+            student_marks_dates.append(i["DATE_ACADEMIC"])
+            marks.append((course_name, i["SMARK"], i["DATE_ACADEMIC"]))
+            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
+
+
+        # # test_one 
+        # print(set(result))
 
         data = [(student_subject, student_marks[i], student_marks_dates[i], user_id) for i in range(len(student_marks))]
         # вставляем все данные об оценках в таблицу grades одним запросом
+
         cursor.executemany("INSERT INTO grades (subject, mark, date, user_id) VALUES (?, ?, ?, ?)", data)
-   
+
 
         text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
 
     db.commit()
     db.close()
-    await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
+    new_marks = set(marks) - set(result)
+
+    print(new_marks)
+
+    if len(new_marks) != 0:
+        text_marks = f"{text_marks}\n\nНОВОЕ:\n"
+        for mark in new_marks:
+            text_marks = text_marks + mark[1] + " по предмету " + mark[0] + " за " + mark[2] + "\n"
+            # text_marks = text_marks + new
+    await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 
 @dp.callback_query(F.data == "Расписание")
@@ -328,26 +346,10 @@ async def marks(callback_query):
     await callback_query.message.answer(f"{text_lessons}\n{tommorow_lessons}\n{today_lessons}")
 
 
-@dp.message(Command("schedule"))
-async def schedule_command(message):
-    await message.answer(text=f"<b>ЗАВТРА</b>:\nОсновы права(сем.занятие) - 10.05 - 11.30 на Ожешко, 22 каб. 122\n\n<b>Вторник:</b>\nИнженерная графика(практ.зан) - 08.30 - 09.55 на БЛК, 5 каб. 206\nИнженерная графика(практ.зан) - 10.05 - 11.30 на БЛК, 5 каб. 206\nМатематика(практ.зан) - 11.40 - 13.05 на БЛК, 5 каб. 408\n\n<b>Среда:</b>\nИнформатика(лаб) - 08.30 - 09.55 на БЛК, 5 каб. 212\nИнформатика(лаб) - 10.05 - 11.30 на БЛК, 5 каб. 212\n\n<b>Четверг:</b>\nИностранный язык(практ. зан) - 08.30 - 09.55 на БЛК, 5 каб. 305\nИностранный язык(практ. зан) - 10.05 - 11.30 на БЛК, 5 каб. 305\n\n<b>Пятница:</b>\nФизика(лекция) - 08.30 - 09.55 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 10.05 - 11.30 на Ожешко, 22 каб. 122\nИнформатика(лекция) - 11.40 - 13.05 на Ожешко, 22 каб. 122\n", parse_mode="HTML")
-
 async def start():
 
     print("Бот готов к работе")
 
-    db_connection = sqlite3.connect("user.db", timeout=10.0)
-    cursor = db_connection.cursor()
-
-    # Получаем данные токена
-    cursor.execute("SELECT subject, mark, date FROM grades WHERE user_id=624374169 AND subject='Математика'")
-    # cursor.execute("INSERT INTO user_preferences(user_id) VALUES(?)", (tg_id))
-    result = cursor.fetchall()
-    print(result)
-    # cursor.commit()
-    cursor.close()
-
-    # await bot.send_message(chat_id=624374169, text="", reply_markup=markup, parse_mode="HTML")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+.env
+__pycache__/settings.cpython-310.pyc
+functions/__pycache__/auth.cpython-310.pyc
+functions/__pycache__/select_info.cpython-310.pyc
+user.db
