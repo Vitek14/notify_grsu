@@ -7,9 +7,10 @@ import asyncio
 
 # Импорт функций
 from functions.auth import auth
-from functions.select_info import select_auth_info, select_group_info
+from functions.select_info import select_auth_info, select_group_info, get_web_user_info
+from functions.parse_marks import get_raw_marks, proccess_marks
 from settings import API_KEY, DB_PASSWORD
-
+from functions.notifications import timer
 
 # Импорт даты чтобы показывать расписание более приятным способом
 from datetime import date, datetime, timedelta
@@ -54,7 +55,6 @@ def set_default_preferences(tg_id):
 
 @dp.message(Command("login"))
 async def login_command(message):
-    # await message.text
     text = message.text.split(" ")
     if len(text) < 3 or len(text) > 3:
         await message.answer(text="Неправильно введены данные!")
@@ -81,18 +81,7 @@ async def login_command(message):
     await waiting_message.edit_text(text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с помощью /delete")
 
 
-def get_web_user_info(user_auth_info):
-    with grequests.Session() as sess:
-        info_about_student = sess.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getEmployeesData"
-        }, cookies={
-            "MDL_SSP_AuthToken": user_auth_info[0][2],
-            "MDL_SSP_SessID": user_auth_info[0][3],
-            "MOODLEID1_": user_auth_info[0][4],
-            "MoodleSession": user_auth_info[0][5]
-        })
-        info = json.loads(info_about_student.text)
-    return info
+
 
 
 def select_settins_info(tg_id):
@@ -164,119 +153,10 @@ async def user_marks(callback_query):
     user_id = callback_query.from_user.id
     user_auth_info = select_auth_info(user_id)
 
-    MDL_SSP_AuthToken =  user_auth_info[0][2],
-    MDL_SSP_SessID = user_auth_info[0][3],
-    MOODLEID1_ = user_auth_info[0][4],
-    MoodleSession = user_auth_info[0][5]
-    TABNUM = user_auth_info[0][6]
+    # Получаем необработанные оценки
+    raw_marks = await get_raw_marks(user_auth_info)
+    text_marks =  proccess_marks(user_id, raw_marks, False)
 
-    with grequests.Session() as session:
-        all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getCoursesData"
-        }, cookies={
-            "MDL_SSP_AuthToken": user_auth_info[0][2],
-            "MDL_SSP_SessID": user_auth_info[0][3],
-            "MOODLEID1_": user_auth_info[0][4],
-            "MoodleSession": user_auth_info[0][5]
-        })
-
-        # Тут получили какие предметы на специальности
-        all_courses_json = json.loads(all_courses.text)["1"]["1"]
-
-
-        text_marks = ""
-        requests = []
-
-        # Создание списка с запросами(requests) на каждый предмет, чтобы потом быстро получить данные о каждом предмете на специальности
-        for course in all_courses_json:
-            course_id = course["kdisc"]
-
-
-            request = grequests.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-                "method": "getPerformanceData",
-                "args[tabnum]": TABNUM,
-                "args[kdisc]": course_id,
-                "args[semester]": "1",
-                "args[year]": "2023",
-                "args[lang]": "6"
-            }, headers={
-                "Connection":"keep-alive",
-                "Cookies": f"MoodleSession={MoodleSession}; MDL_SSP_AuthToken={MDL_SSP_AuthToken}; MDL_SSP_SessID={MDL_SSP_SessID}, MOODLEID1_={MOODLEID1_}"
-            })
-
-            requests.append(request)
-
-        responses = grequests.map(requests, stream=True)
-
-
-    
-    # задаем переменные с данными об оценках
-    # student_subject = "Математика"
-    # student_marks = [6, 9, 10, 6, 7]
-    # student_marks_dates = ["11-10", "16-10", "04-11", "16-11", "02-12"]
-    # user_id = 1
-    # # создаем список кортежей с данными
-    
-    # Это уже парсинг каждого предмета
-
-    db = sqlite3.connect("user.db")
-    cursor = db.cursor()
-
-    cursor.execute("SELECT subject, mark, date FROM grades WHERE user_id=624374169")
-    result = cursor.fetchall()
-    if result != 0:
-        cursor.execute("DELETE FROM grades WHERE user_id=624374169")
-
-    marks = []
-    for item in responses:
-        json_course = json.loads(item.text)
-
-
-        all_marks = ""
-        # student_marks = []  # Аналог all_marks, потом надо убрать all_marks, если с student_marks будет нормально работать
-
-        student_marks = []
-        student_marks_dates = []
-
-        # Проверяем даёт ли запрос на название предмета ответ
-        try:
-            course_name = json_course[0]["NDISC"]  # Убрать
-            student_subject = json_course[0]["NDISC"]  
-        except:
-            continue
-
-        for i in json_course:
-            if i["SMARK"] == "":
-                continue
-            student_marks.append(i["SMARK"])
-            student_marks_dates.append(i["DATE_ACADEMIC"])
-            marks.append((course_name, i["SMARK"], i["DATE_ACADEMIC"]))
-            all_marks = all_marks + re.sub(CLEANR, "", f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
-
-
-        # # test_one 
-        # print(set(result))
-
-        data = [(student_subject, student_marks[i], student_marks_dates[i], user_id) for i in range(len(student_marks))]
-        # вставляем все данные об оценках в таблицу grades одним запросом
-
-        cursor.executemany("INSERT INTO grades (subject, mark, date, user_id) VALUES (?, ?, ?, ?)", data)
-
-
-        text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
-
-    db.commit()
-    db.close()
-
-    new_marks = set(marks) - set(result)
-
-    print(new_marks)
-
-    if len(new_marks) != 0:
-        text_marks = f"{text_marks}\n\nНОВОЕ:\n"
-        for mark in new_marks:
-            text_marks = text_marks + mark[1] + " по предмету " + mark[0] + " за " + mark[2] + "\n"
-            # text_marks = text_marks + new
     await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 
@@ -349,8 +229,10 @@ async def marks(callback_query):
 async def start():
 
     print("Бот готов к работе")
-
+    asyncio.create_task(timer(bot, 300))
+    loop = asyncio.get_event_loop()
     await dp.start_polling(bot)
+    
 
 if __name__ == "__main__":
     asyncio.run(start())
