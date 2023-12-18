@@ -7,7 +7,7 @@ import asyncio
 
 # Импорт функций
 from functions.auth import auth
-from functions.select_info import select_auth_info, select_group_info, get_web_user_info
+from functions.select_info import select_auth_info, select_group_info, get_web_user_info, get_attestation
 from functions.parse_marks import get_raw_marks, proccess_marks
 from settings import API_KEY, DB_PASSWORD
 from functions.notifications import timer
@@ -82,8 +82,6 @@ async def login_command(message):
 
 
 
-
-
 def select_settins_info(tg_id):
     db_connection = sqlite3.connect("user.db", timeout=10.0)
     cursor = db_connection.cursor()
@@ -93,6 +91,39 @@ def select_settins_info(tg_id):
     result = cursor.fetchall()
     cursor.close()
     return result
+
+
+@dp.message(Command("attestation"))
+async def attestation(message):
+    bot_message = await message.answer(text="Производим запросы...", protect_content=True)
+
+
+    # Есть повторение в коде. Повторяется где настройки
+    result = select_auth_info(message.from_user.id)
+
+    if not result:
+        await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
+
+    info = get_attestation(result)
+    print(info)
+
+    await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
+    auth(message.from_user.id, result[0][0], result[0][1])
+    result = select_auth_info(message.from_user.id)
+    info = get_attestation(result)
+
+
+    # useful_info = info["userInfo"]
+    markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
+
+    btn1 = aiogram.types.InlineKeyboardButton(text="Успеваемость", callback_data="Успеваемость")
+    # btn2 = aiogram.types.InlineKeyboardButton(text="Расписание", callback_data="Расписание")
+
+    markup.inline_keyboard.append([btn1])
+
+    await bot_message.edit_text(f"""Тест""", reply_markup=markup, protect_content=True)
+
 
 @dp.message(Command("settings"))
 async def settings(message):
@@ -159,6 +190,8 @@ async def user_marks(callback_query):
 
     await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
+
+# @dp.callback_query(F.data=="Промежуточная аттестация")
 
 @dp.callback_query(F.data == "Расписание")
 async def marks(callback_query):

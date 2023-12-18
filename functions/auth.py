@@ -18,6 +18,7 @@ def auth(user_id, login, password):
             "password": password,
             "AuthState": AuthState
         }
+        print(password)
 
         response = session.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data)
 

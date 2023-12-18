@@ -11,6 +11,7 @@ def select_auth_info(tg_id: int) -> list:
     # Получаем данные токена
     cursor.execute("SELECT username, password, MDL_SSP_AuthToken, MDL_SSP_SessID, MOODLEID1_, MoodleSession, tabnum FROM user_data WHERE tg_id=?", (tg_id,))
     result = cursor.fetchall()
+    print(result[0][1])
     cursor.close()
     return result
 
@@ -28,8 +29,8 @@ def select_group_info(tg_id: int) -> list:
     return result
 
 def get_web_user_info(user_auth_info):
-    with grequests.Session() as sess:
-        info_about_student = sess.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+    with grequests.Session() as session:
+        info_about_student = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
             "method": "getEmployeesData"
         }, cookies={
             "MDL_SSP_AuthToken": user_auth_info[0][2],
@@ -38,4 +39,17 @@ def get_web_user_info(user_auth_info):
             "MoodleSession": user_auth_info[0][5]
         })
         info = json.loads(info_about_student.text)
+    return info
+
+def get_attestation(user_auth_info):
+    with grequests.Session() as session:
+        info_about_attestation = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+            "method": "getAttestation"
+        }, cookies={
+            "MDL_SSP_AuthToken": user_auth_info[0][2],
+            "MDL_SSP_SessID": user_auth_info[0][3],
+            "MOODLEID1_": user_auth_info[0][4],
+            "MoodleSession": user_auth_info[0][5]
+        })
+        info = json.loads(info_about_attestation.text)
     return info
