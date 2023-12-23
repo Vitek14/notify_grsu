@@ -1,3 +1,4 @@
+import grequests
 import asyncio
 # Для нормальной обработки контента
 import json
@@ -8,7 +9,6 @@ import sqlite3
 from datetime import datetime, timedelta
 
 import aiogram
-import grequests
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters.command import Command
 
@@ -107,24 +107,58 @@ async def attestation(message):
         await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
         return
 
-    info = get_attestation(result)
-    print(info)
+    # TODO: Занести обновление токена в отдельную функцию refresh_token
+    info = get_attestation(result, "getAttestation")
+    try:
+        info[0]
+    except Exception as error:
+        print(error)
+        await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
+        auth(message.from_user.id, result[0][0], result[0][1])
+        result = select_auth_info(message.from_user.id)
+        info = get_attestation(result, "getAttestation")
 
-    await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
-    auth(message.from_user.id, result[0][0], result[0][1])
-    result = select_auth_info(message.from_user.id)
-    info = get_attestation(result)
+    attestation_text = "Промежуточная аттестация:\n"
+    for subject in info:
+        # Предмет: зачтено(дата)
+        attestation_text = attestation_text + subject["NAME_DISC"] + ": <b>" + subject["OCEN"] + "</b>   (" + subject["childs"][0]["DOCEN"] + ")" + "\n"
 
-    # useful_info = info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
     btn1 = aiogram.types.InlineKeyboardButton(text="Успеваемость", callback_data="Успеваемость")
-    # btn2 = aiogram.types.InlineKeyboardButton(text="Расписание", callback_data="Расписание")
 
     markup.inline_keyboard.append([btn1])
 
-    await bot_message.edit_text(f"""Тест""", reply_markup=markup, protect_content=True)
+    await bot_message.edit_text(attestation_text, reply_markup=markup, protect_content=True, parse_mode="HTML")
 
+
+@dp.callback_query(F.data == "Успеваемость")
+async def user_marks(callback_query):
+    await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...")
+
+    # Есть повторение в коде. Повторяется, где настройки
+    user_id = callback_query.from_user.id
+    result = select_auth_info(user_id)
+
+    if not result:
+        assert "Ошибка входа в аккаунт. Эта ошибка не должна происходить в обычном режиме"
+        # await callback_query.message.answer("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
+        return
+
+    # TODO: Занести обновление токена в отдельную функцию refresh_token
+    info = get_attestation(result, "getProgress")
+    try:
+        info[0]
+    except Exception as error:
+        print(error)
+        print("Данная ошибка не должна происходить в обычном режиме.")
+
+    attestation_text = "Успеваемость:\n"
+    for subject in info:
+        # Предмет: зачтено(дата)
+        attestation_text = attestation_text + subject["NDISC"] + ": <b>" + subject["OCENS"] + "</b>   (" + subject["DOCEN"] + ")" + "\n"
+
+    await callback_query.message.answer(attestation_text, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
 @dp.message(Command("settings"))
 async def settings(message):
