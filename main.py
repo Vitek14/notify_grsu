@@ -19,6 +19,17 @@ from functions.parse_marks import get_raw_marks, proccess_marks
 from functions.select_info import select_auth_info, select_group_info, get_web_user_info, get_attestation
 from settings import API_KEY
 
+
+class Student:
+    def auth(self, login, password):
+        pass
+
+
+    def refresh_token(self, login, password):
+        pass
+
+    # def get_user_info(self, auth_info):
+
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
 bot = Bot(API_KEY)
@@ -183,8 +194,6 @@ async def user_marks(callback_query):
 
     await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
 
-
-# @dp.callback_query(F.data=="Промежуточная аттестация")
 
 @dp.callback_query(F.data == "Расписание")
 async def marks(callback_query):
