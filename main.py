@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 # Для нормальной обработки контента
 import json
