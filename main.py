@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import grequests
 import asyncio
 # Для нормальной обработки контента
 import json
@@ -9,7 +10,6 @@ import sqlite3
 from datetime import datetime, timedelta
 
 import aiogram
-import grequests
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters.command import Command
 
@@ -20,23 +20,15 @@ from functions.parse_marks import get_raw_marks, proccess_marks
 from functions.select_info import select_auth_info, select_group_info, get_web_user_info, get_attestation
 from settings import API_KEY
 
-
-class Student:
-    def auth(self, login, password):
-        pass
-
-
-    def refresh_token(self, login, password):
-        pass
-
-    # def get_user_info(self, auth_info):
+from grsu.student import Student
 
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
 bot = Bot(API_KEY)
 
-dp = Dispatcher()
+student = Student()
 
+dp = Dispatcher()
 
 @dp.message(Command("agree"))
 async def agree_command(message):
@@ -80,13 +72,16 @@ async def login_command(message):
                                              text="Пробуем войти, это может занять некоторое время ⌛️")
 
     # Функция входа
-    text = auth(user_id, login, password)
+    auth_info = student.auth(login, password)
 
     # Если функция вернула текст, то значит что неверная авторизация.
     # Поэтому отправляем сообщение об этом
-    if type(text) == str:
-        await waiting_message.edit_text(text=text)
+    if type(auth_info) == str:
+        await waiting_message.edit_text(text=auth_info)
         return
+
+    if not student.check_if_exists(user_id):
+        student.create_new_student(user_id, auth_info, login, password)
 
     # set_default_preferences(user_id)
 
@@ -147,25 +142,26 @@ async def settings(message):
 async def start_command(message):
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
-    # Есть повторение в коде. Повторяется, где настройки
-    result = select_auth_info(message.from_user.id)
+    user_id = message.from_user.id
+    result = student.check_if_exists(user_id)
 
     if not result:
         await bot_message.edit_text("Вы ещё не вошли в аккаунт! Сделайте это с помощью команды /login")
         return
 
-    info = get_web_user_info(result)
+    token_info = student.get_token(user_id)
+    about_info = student.get_about(token_info)
 
     try:
-        info["userInfo"]
+        about_info["userInfo"]
     except Exception as error:
-        print(error)
         await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
-        auth(message.from_user.id, result[0][0], result[0][1])
-        result = select_auth_info(message.from_user.id)
-        info = get_web_user_info(result)
+        login_info = student.get_login(user_id)
+        new_token = student.auth(login_info["username"], login_info["password"])
+        student.refresh_token(new_token, user_id)
+        info = student.get_about(new_token)
 
-    useful_info = info["userInfo"]
+    useful_info = about_info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
     btn1 = aiogram.types.InlineKeyboardButton(text="Оценки", callback_data="Оценки")
