@@ -1,5 +1,16 @@
 import grequests
 import json
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+import re
+
+Base = declarative_base()
+
+# Подключаемся к базе данных с данными пользователя
+engine = create_engine('sqlite:///user.db')
+Base.metadata.create_all(engine)
 
 def get_about(self, token_info: dict) -> dict:
     """

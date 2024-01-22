@@ -1,15 +1,15 @@
 import grequests
 import json
-import sqlite3
+from ..exceptions import InvalidCredentialsError, ConnectionError
 
-def auth(self, login: str, password: str) -> dict | str:
+def auth(self, login: str, password: str) -> dict:
     """Фукнция авторизует пользователя с помощью его логина и пароля. Функция возвращает либо текст с ошибкой для пользователя,
      либо словарь с данными аутентификации"""
 
-    # Для безопасного соединения, а также автоматического закрытия сессии
+    # Для автоматического закрытия сессии
     with grequests.Session() as session:
 
-        # Получаем токен для нормальной работы
+        # Получаем токен
         before_auth_page = session.get('https://edu.grsu.by/login')
         before_html = before_auth_page.text
         AuthState = before_html.split('name="AuthState" value="')[1].split('"')[0]
@@ -21,16 +21,16 @@ def auth(self, login: str, password: str) -> dict | str:
         }
 
         response = session.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data)
+        old_cookies = session.cookies.get_dict()
 
-        # Пытаемся найти значение токена пользователя, иначе возвращаем ему ошибку!
+        # Пытаемся найти значение токена пользователя, иначе возвращаем ошибку!
         try:
             SAMLResponse = response.text.split('name="SAMLResponse" value="')[1].split('"')[0]
         except IndexError:
-            text = "Ошибка! Видимо ваши прекрасные ручки ошиблись и написали не тот логин или пароль. А может сайт решил прилечь на некоторое время... Мы не знаем!"
-            return text
+            raise InvalidCredentialsError
 
-
-        main_auth_response = session.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
+        # Логинимся, используя токен
+        session.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
             "SAMLResponse": SAMLResponse,
             "RelayState": "https://edu.grsu.by/login/index.php"
         })
@@ -68,9 +68,6 @@ def about(self, cookies: dict) -> dict:
         cookies["lang"] = LANG
 
         groups_info_json = json.loads(groups_info.text)
-        print(groups_info_json)
-
-        # Прикол в том, что я не знаю есть ли и другие группы(количество)....
 
         # Ищем группу и добавляем туда пользователя
         group_ids = [0, 0, 0, 0, 0, 0]

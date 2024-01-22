@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import grequests
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, reply_keyboard_markup
 import asyncio
 # Для нормальной обработки контента
 import json
@@ -10,27 +11,55 @@ import sqlite3
 from datetime import datetime, timedelta
 
 import aiogram
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters.command import Command
+from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
+from aiogram.fsm.context import FSMContext
 
 # Импорт функций
 from functions.auth import auth
 from functions.notifications import timer
-from functions.parse_marks import get_raw_marks, proccess_marks
 from functions.select_info import select_auth_info, select_group_info, get_web_user_info, get_attestation
 from settings import API_KEY
+from aiogram.fsm.state import State, StatesGroup
 
 from grsu.student import Student
+from grsu.student.marks import Marks
+from grsu.schedule import Schedule
+from grsu.exceptions import *
+
+from datetime import datetime
+import locale
+
+# Устанавливаем русскую локализацию
+locale.setlocale(locale.LC_TIME, 'ru')
 
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
 bot = Bot(API_KEY)
 
 student = Student()
+st_marks = Marks()
+schedule = Schedule()
+form_router = Router()
 
 dp = Dispatcher()
 
+class StateMarks(StatesGroup):
+    subject = State()
+
+def clear_state(func):
+    async def wrapper(message, state: FSMContext):
+        clear = await message.answer(text="Удаляем лишние кнопки, если имеются...", protect_content=True, reply_markup=ReplyKeyboardRemove())
+        await clear.delete()
+        await state.clear()
+        original_func = await func(message, state)
+        return original_func
+    return wrapper
+
+
 @dp.message(Command("agree"))
+@clear_state
 async def agree_command(message):
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
@@ -58,6 +87,7 @@ def set_default_preferences(tg_id):
 
 
 @dp.message(Command("login"))
+@clear_state
 async def login_command(message):
     text = message.text.split(" ")
     if len(text) < 3 or len(text) > 3:
@@ -72,12 +102,10 @@ async def login_command(message):
                                              text="Пробуем войти, это может занять некоторое время ⌛️")
 
     # Функция входа
-    auth_info = student.auth(login, password)
-
-    # Если функция вернула текст, то значит что неверная авторизация.
-    # Поэтому отправляем сообщение об этом
-    if type(auth_info) == str:
-        await waiting_message.edit_text(text=auth_info)
+    try:
+        auth_info = student.auth(login, password)
+    except InvalidCredentialsError:
+        await waiting_message.edit_text(text=InvalidCredentialsError().message)
         return
 
     if not student.check_if_exists(user_id):
@@ -104,6 +132,7 @@ def select_settings_info(tg_id):
 
 
 @dp.message(Command("attestation"))
+@clear_state
 async def attestation(message):
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
@@ -139,7 +168,9 @@ async def settings(message):
 
 
 @dp.message(Command("info"))
-async def start_command(message):
+@clear_state
+async def start_command(message, state):
+    
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
     user_id = message.from_user.id
@@ -159,8 +190,10 @@ async def start_command(message):
         login_info = student.get_login(user_id)
         new_token = student.auth(login_info["username"], login_info["password"])
         student.refresh_token(new_token, user_id)
-        info = student.get_about(new_token)
+        about_info = student.get_about(new_token)
+        # return info
 
+    # print(useful_info)
     useful_info = about_info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
@@ -179,17 +212,61 @@ EMAIL: {useful_info["EMAIL"]}
 
 
 @dp.callback_query(F.data == "Оценки")
-async def user_marks(callback_query):
-    await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...")
+async def user_marks(callback_query, state: FSMContext):
+    await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...", reply_markup=ReplyKeyboardRemove())
 
     user_id = callback_query.from_user.id
-    user_auth_info = select_auth_info(user_id)
+    # user_auth_info = select_auth_info(user_id)
+    user_auth_info = student.get_token(user_id)
+    about_info = student.get_about(user_auth_info)
 
     # Получаем необработанные оценки
-    raw_marks = await get_raw_marks(user_auth_info)
-    text_marks = proccess_marks(user_id, raw_marks, False)
+    courses_data = st_marks.get_courses_data(user_id, user_auth_info)
+    course_names = st_marks.get_courses_names(courses_data)
+    marks = st_marks.get_marks_from_site(user_id, user_auth_info, about_info, courses_data)
+    db_marks = st_marks.get_marks(user_id)
 
-    await callback_query.message.answer(text_marks, parse_mode="HTML")  # Узнать проблему с жирным шрифтом
+    new_marks = set(marks) - set(db_marks)
+    deleted_marks = set(db_marks) - set(marks)
+    # text_marks = st_marks.proccess_marks(user_id, raw_marks, False)
+    keyboard_list = []
+    sort_list = []
+    for subject in course_names:
+        if len(sort_list) == 2 or len(course_names) == course_names.index(subject):
+            keyboard_list.append(sort_list)
+            sort_list = []
+        sort_list.append(KeyboardButton(text=subject))
+    keyboard_list.append([KeyboardButton(text="Убрать это...")])
+
+    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+
+    await callback_query.message.answer("Выберите желаемый предмет", reply_markup=buttons)  # Узнать проблему с жирным шрифтом
+    await state.set_state(StateMarks.subject)
+
+@dp.message(StateMarks.subject)
+async def process_name(message, state: FSMContext) -> None:
+    if message.text == "Убрать это...":
+        await state.clear()
+        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        return
+
+    user_id = message.from_user.id
+    marks = st_marks.get_marks(user_id)
+    text = "Оценки по предмету " + message.text + ":\n"
+    subject_list = []
+    for mark in marks:
+        if message.text in mark:
+            date_obj = datetime.strptime(mark[2], "%Y-%m-%d %H:%M:%S")
+            # Форматируем дату с использованием локализации
+            formatted_date = date_obj.strftime("%A, %d %B, %H:%M")
+            text = text + "<b>" + re.sub(CLEAN_TAGS, "", mark[1]) + "</b> за " + formatted_date + "\n"
+            subject_list.append(mark)
+
+    if len(subject_list) == 0:
+        await message.answer(text="Мы не нашли оценок для этого предмета, попробуйте другой или уберите эти кнопки снизу нажав на соответствующую кнопку")
+        return
+
+    await message.answer(text=text, parse_mode="HTML")
 
 
 @dp.callback_query(F.data == "Расписание")
@@ -199,7 +276,6 @@ async def marks(callback_query):
 
     group_info = select_group_info(callback_query.from_user.id)
 
-    print(group_info[0])
     study_group = group_info[0][0]
     lab_group_one = group_info[0][1]
     lab_group_two = group_info[0][2]
@@ -207,11 +283,12 @@ async def marks(callback_query):
     lab_group_four = group_info[0][4]
     faculty_group = group_info[0][5]
 
+    schedule.create_schedule(int(study_group))
+
     with grequests.Session() as session:
         group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
     json_group_schedule = json.loads(group_schedule.text)
 
-    print("Завершена загрузка")
 
     today_raw = datetime.today()  # .strftime('%Y-%m-%d')
     yesterday_raw = today_raw - timedelta(1)
@@ -264,7 +341,7 @@ async def marks(callback_query):
 
 async def start():
     print("Бот готов к работе")
-    asyncio.create_task(timer(bot, 300))
+    # asyncio.create_task(timer(bot, 300))
     await dp.start_polling(bot)
 
 

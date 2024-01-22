@@ -27,24 +27,19 @@ class Student(Base):
     tg_id = Column(Integer)
 
     from ._auth import auth, about
-    from ._select_info import get_login, get_groups, get_token
+    from .data.select import get_login, get_groups, get_token
     from ._parse_info import get_about, get_attestation
 
     def refresh_token(self, new_token: dict, tg_id: int) -> None:
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
+        
         # Объявляем объект сессии
         Session = sessionmaker(engine)
         print("Обновление токена")
-        # sess = update(Student).where(Student.tg_id == tg_id).values(**new_token)
-        # print(sess)
         with Session() as session:
-            # sess = session.query(Student).filter_by(tg_id=tg_id).update(new_token)
-            # print(sess)
             session.execute(update(Student).where(Student.tg_id == tg_id).values(new_token)) # type: ignore
             session.commit() 
-        #   print(sess)
-
 
 
     def check_if_exists(self, user_id: int) -> bool:
