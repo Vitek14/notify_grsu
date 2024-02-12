@@ -15,5 +15,7 @@ Session = sessionmaker(engine)
 def delete_marks(self, user_id: int, data) -> None:
     Marks = self.__class__
     with Session() as session:
-        session.execute(delete(Marks).values(data)) # type: ignore
+        for mark in data:
+            session.query(Marks).filter_by(subject=mark[0], mark=mark[1], date=mark[2], user_id=user_id).delete()
+            # session.execute(delete(Marks).values(data)) # type: ignore
         session.commit()

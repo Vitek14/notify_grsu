@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-from sqlalchemy import update, insert
+from sqlalchemy import update, insert, select
 
 Base = declarative_base()
 
@@ -52,10 +52,13 @@ class Schedule(Base):
         # Объявляем объект сессии
         Session = sessionmaker(engine)
         with Session() as session:
-            schedule = session.query(Schedule).filter_by(group_id=group_id).all()
+            # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
+            schedule = session.execute(select(Schedule.rowid, Schedule.name, Schedule.lesson_type,
+            Schedule.place, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time,
+            Schedule.end_time, Schedule.group_id).where(Schedule.group_id == group_id)).all()
         return schedule
 
-    def create_schedule(self, group_id: int) -> None:
+    def create_schedule(self, group_id: int) -> list:
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
         Session = sessionmaker(engine)
@@ -65,8 +68,9 @@ class Schedule(Base):
         with Session() as session:
             session.execute(insert(Schedule).values(schedule))
             session.commit()
+        return schedule
 
-    def get_new_lessons(self, schedule_db: list, schedule_web: list) -> list:
+    def get_new_lessons(self, schedule_db: list, schedule_web: list, group_id: int) -> list:
         """
         Функция выведет предметы, которые добавились в расписание
         :schedule_db: Содержит расписание, взятое из базы данных
@@ -76,9 +80,8 @@ class Schedule(Base):
         Base.metadata.create_all(engine)
         Session = sessionmaker(engine)
 
-        
-
         with Session() as session:
             schedule = session.query(Schedule).filter_by(group_id=group_id).all()
+            print(schedule)
 
 

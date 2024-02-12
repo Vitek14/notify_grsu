@@ -5,3 +5,6 @@ functions/__pycache__/select_info.cpython-310.pyc
 user.db
 functions/__pycache__/notifications.cpython-310.pyc
 functions/__pycache__/parse_marks.cpython-310.pyc
+test.py
+__pycache__/
+.idea/discord.xml

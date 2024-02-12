@@ -35,6 +35,12 @@ def auth(self, login: str, password: str) -> dict:
             "RelayState": "https://edu.grsu.by/login/index.php"
         })
 
+        test = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+            "method": "getCoursesData"
+        })
+
+        # print(json.loads(test.text))
+
         cookies = session.cookies.get_dict()
         login_dict = {
             "MDL_SSP_AuthToken": cookies["MDL_SSP_AuthToken"],

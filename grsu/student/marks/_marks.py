@@ -41,7 +41,6 @@ def get_marks_from_site(self, user_id: int, cookies: dict, student_info: dict, a
         # Создание списка с запросами(requests) на каждый предмет, чтобы потом быстро получить данные о каждом
         # предмете на специальности
     requests = []
-
     for course in all_courses:
         course_id = course["kdisc"]
 
@@ -57,18 +56,26 @@ def get_marks_from_site(self, user_id: int, cookies: dict, student_info: dict, a
             "args[year]": "2023",
             "args[lang]": "6"
         }, headers={
-            "Connection": "keep-alive",
-            "Cookies": f"MoodleSession={MoodleSession}; MDL_SSP_AuthToken={MDL_SSP_AuthToken}; "
-                        f"MDL_SSP_SessID={MDL_SSP_SessID}, MOODLEID1_={MOODLEID1_} "
-        })
-
+            # "Connection": "keep-alive",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": f"MoodleSession={MoodleSession}; MDL_SSP_AuthToken={MDL_SSP_AuthToken}; MDL_SSP_SessID={MDL_SSP_SessID}; MOODLEID1_={MOODLEID1_}"
+            # "Cookie": "MoodleSession=gt74qs03ggsmfqtp9i4ekmnqg0; MDL_SSP_SessID=920e82544cd43b6af5b4179790c93295; MDL_SSP_AuthToken=_41d5cbbc923ddb065ab9b07676a02e00e14c09efde; MOODLEID1_=e%2507%25A6G%25D5M%250B%2540%25BE%25E4%259E%2522%25E7%2B-%2583%25223QlI%2514j%25D1h%25F6"
+            }, cookies={
+                "MoodleSession": MoodleSession,
+                "MDL_SSP_AuthToken": MDL_SSP_AuthToken,
+                "MDL_SSP_SessID": MDL_SSP_SessID,
+                "MOODLEID1_": MOODLEID1_
+            })
         requests.append(request)
 
+    print("Запросы были отправлены")
     responses = grequests.map(requests, stream=True)
+    print("Запросы обработаны")
 
     # Следующий код анализирует полученные ответы(responses) и добавляет в ЛИСТ КОРТЕЖИ из оценок с сайта
     marks_from_site = []
     for url in responses:
+        print("peeeee")
         subject_info = json.loads(url.text)
 
         # Проверяем существует ли предмет
@@ -81,55 +88,10 @@ def get_marks_from_site(self, user_id: int, cookies: dict, student_info: dict, a
         for lesson in subject_info:
             if lesson["SMARK"] == "":
                 continue
-                
+
             mark = lesson["SMARK"]
             date = lesson["DATE_ACADEMIC"]
 
-            marks_from_site.append((mark, date, course_name, user_id))
-        #     all_marks = all_marks + re.sub(CLEAN_TAGS, "",
-        #                                 f'Оценка <b>{i["SMARK"]}</b> за {i["NPOCEN_KONTRL"]}.') + "\n"
-        #     data.append((None, student_subject, i["SMARK"], i["DATE_ACADEMIC"], user_id))
-
-        # text_marks = text_marks + f"Оценки по предмету {course_name}:\n{all_marks}\n\n"
+            marks_from_site.append((course_name, mark, date, user_id))
+            # marks_from_site.append((mark, date, course_name, user_id))
     return marks_from_site
-
-# def get_text_for_notification_marks(self, new_marks: set) -> str:
-#     pass
-
-# def get_text_for_marks(self, new_marks, all_marks):
-#     text = "Оценки по предмету"
-#     for 
-
-def proccess_marks(self, user_id: int, responses: list, is_notification: bool):
-    marks = get_marks(self, user_id)
-    # if marks:
-    #     # Удаляет оценки, чтобы можно было далее 
-    #     delete_marks(self, user_id)
-    # else:
-    #     result = []
-
-    new_marks = []
-
-    # Текст, который отправится пользователю
-    text_marks = ""
-    data = []
-
-    
-
-    # Проверить позже
-    new_marks = set(new_marks) - set(marks)
-
-
-
-    # Если функция вызвана автоматически(для уведомлений)
-    if is_notification:
-        return new_marks
-
-    insert_new_marks(self, user_id, data)
-
-    if len(new_marks) != 0 and len(marks) != 0:
-        text_marks = f"{text_marks}\n\nНОВОЕ:\n"
-        for mark in new_marks:
-            text_marks = text_marks + re.sub(CLEAN_TAGS, "", f"{mark[1]} по предмету {mark[0]} за {mark[2]}\n")
-
-    return text_marks

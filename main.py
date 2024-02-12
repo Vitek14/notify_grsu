@@ -6,12 +6,11 @@ import asyncio
 import json
 # Для чистки текста от html тегов
 import re
-import sqlite3
 # Импорт даты, чтобы показывать расписание более приятным способом
 from datetime import datetime, timedelta
 
 import aiogram
-from aiogram import Bot, Dispatcher, Router, F
+from aiogram import Bot, Dispatcher, Router, F, types
 from aiogram.filters.command import Command
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
@@ -25,8 +24,11 @@ from aiogram.fsm.state import State, StatesGroup
 
 from grsu.student import Student
 from grsu.student.marks import Marks
+from grsu.student.settings import Settings
 from grsu.schedule import Schedule
 from grsu.exceptions import *
+
+from settings import info_settings
 
 from datetime import datetime
 import locale
@@ -41,12 +43,18 @@ bot = Bot(API_KEY)
 student = Student()
 st_marks = Marks()
 schedule = Schedule()
+st_settings = Settings()
 form_router = Router()
 
 dp = Dispatcher()
 
 class StateMarks(StatesGroup):
     subject = State()
+
+class StateSettings(StatesGroup):
+    previous_message = State()
+    category = State()
+    settings = State()
 
 def clear_state(func):
     async def wrapper(message, state: FSMContext):
@@ -75,20 +83,12 @@ async def agree_command(message):
 
 def set_default_preferences(tg_id):
     # Подключаемся к базе данных с данными пользователя
-    db_connection = sqlite3.connect("user.db", timeout=10.0)
-    cursor = db_connection.cursor()
-
-    # Получаем данные токена
-    cursor.execute("INSERT INTO user_preferences(user_id) VALUES(?)", tg_id)
-    # result = cursor.fetchall()
-    # cursor.commit()
-    cursor.close()
-    # return result
+    pass
 
 
 @dp.message(Command("login"))
 @clear_state
-async def login_command(message):
+async def login_command(message, state):
     text = message.text.split(" ")
     if len(text) < 3 or len(text) > 3:
         await message.answer(text="Неправильно введены данные!")
@@ -111,24 +111,14 @@ async def login_command(message):
     if not student.check_if_exists(user_id):
         student.create_new_student(user_id, auth_info, login, password)
 
-    # set_default_preferences(user_id)
+    # Создание настроек пользователя, если не созданы
+    user_settings = st_settings.get_settings(user_id)
+    if len(user_settings) == 0:
+        st_settings.create_settings(user_id)
 
     await waiting_message.edit_text(
         text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с "
              "помощью /delete")
-
-
-def select_settings_info(tg_id):
-    db_connection = sqlite3.connect("user.db", timeout=10.0)
-    cursor = db_connection.cursor()
-
-    # Получаем данные токена
-    cursor.execute(
-        "SELECT show_today_at_end, show_USR, show_full_schedule_for_next_days FROM user_prefrences WHERE user_id=?",
-        (tg_id,))
-    result = cursor.fetchall()
-    cursor.close()
-    return result
 
 
 @dp.message(Command("attestation"))
@@ -163,9 +153,70 @@ async def attestation(message):
 
 
 @dp.message(Command("settings"))
-async def settings(message):
-    return
+async def settings(message, state):
+    # bot_message = await message.answer("Получаем ваши настройки...")
+    user_id = message.from_user.id
+    user_settings = st_settings.get_settings(user_id)
+    if len(user_settings) == 0:
+        st_settings.create_settings(user_id)
+        user_settings = st_settings.get_settings(user_id)
+    
+    keyboard_list = [[KeyboardButton(text="Инфо")], [KeyboardButton(text="Уведомления")], [KeyboardButton(text="Логин")], [KeyboardButton(text="Убрать это...")]]
 
+    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+
+    await message.answer(f"""Это меню настроек. Ниже выберите категорию настроек и настройте что вы хотите.""", reply_markup=buttons)
+    await state.set_state(StateSettings.category)
+
+@dp.message(StateSettings.category)
+@form_router.message(F.text.casefold() == "Инфо")
+async def settings_reply(message, state: FSMContext) -> None:
+    # if message.text == "Убрать это...":
+    #     await state.clear()
+    #     await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+    #     return
+    keyboard_list = [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это...")]]
+
+    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+    user_id = message.from_user.id
+    user_settings = st_settings.get_settings(user_id)
+    bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
+Показывать факультет: {user_settings["show_faculty"]}
+Показывать специальность: {user_settings["show_specialization"]}
+Показывать почту: {user_settings["show_email"]}
+Показывать группу: {user_settings["show_group"]}""", reply_markup=buttons)
+    await state.update_data(previous_message=bot_message)
+    await state.set_state(StateSettings.settings)
+
+
+@dp.message(StateSettings.settings)
+async def info_settings_reply(message, state: FSMContext) -> None:
+    if message.text == "Убрать это...":
+        await state.clear()
+        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        return
+    previous_message = await state.get_data()
+    # print(previous_message)
+    # print(previous_message["previous_message"].text)
+    user_id = message.from_user.id
+
+    if message.text in info_settings:
+        settings = st_settings.get_settings(user_id)
+        value = settings[info_settings[message.text]]
+        value ^= 1
+        st_settings.update_setting(user_id, info_settings[message.text], value)
+        keyboard_list = [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это...")]]
+        buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+        user_settings = st_settings.get_settings(user_id)
+        bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
+Показывать факультет: {user_settings["show_faculty"]}
+Показывать специальность: {user_settings["show_specialization"]}
+Показывать почту: {user_settings["show_email"]}
+Показывать группу: {user_settings["show_group"]}""", reply_markup=buttons)
+        await previous_message["previous_message"].delete()
+        await message.delete()
+        await state.update_data(previous_message=bot_message)
+    # marks = st_marks.get_marks(user_id)
 
 @dp.message(Command("info"))
 @clear_state
@@ -181,9 +232,18 @@ async def start_command(message, state):
         return
 
     token_info = student.get_token(user_id)
+    print("Token is")
+    print(token_info)
     about_info = student.get_about(token_info)
 
     try:
+        # САЙТ ИЗМЕНИЛИ В ХУДШУЮ СТОРОНУ! СЛЕДУЮЩИХ СТРОК НЕ ДОЛЖНО БЫЛО БЫТЬ!!
+        login_info = student.get_login(user_id)
+        new_token = student.auth(login_info["username"], login_info["password"])
+        student.refresh_token(new_token, user_id)
+        about_info = student.get_about(new_token)
+
+
         about_info["userInfo"]
     except Exception as error:
         await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
@@ -191,9 +251,8 @@ async def start_command(message, state):
         new_token = student.auth(login_info["username"], login_info["password"])
         student.refresh_token(new_token, user_id)
         about_info = student.get_about(new_token)
-        # return info
 
-    # print(useful_info)
+
     useful_info = about_info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
 
@@ -202,13 +261,17 @@ async def start_command(message, state):
 
     markup.inline_keyboard.append([btn1, btn2])
 
+    user_settings = st_settings.get_settings(user_id)
+    faculty = ("\nФакультет: " + useful_info["N_OTDEL"]) if user_settings["show_faculty"] == 1 else ""
+    specialization = ("\nСпециальность: " + useful_info["NNAUCH"]) if user_settings["show_specialization"] == 1 else ""
+    email = ("\nEMAIL: " + useful_info["EMAIL"]) if user_settings["show_email"] == 1 else ""
+    group = ("\nГруппа: " + useful_info["N_GRYP"]) if user_settings["show_group"] == 1 else ""
+
+
     await bot_message.edit_text(f"""
 ФИО: {useful_info["FIO_R"]}
-Курс: {useful_info["N_D"]}
-Факультет: {useful_info["N_OTDEL"]}
-Специальность: {useful_info["NNAUCH"]}
-EMAIL: {useful_info["EMAIL"]}
-Группа: {useful_info["N_GRYP"]}""", reply_markup=markup, protect_content=True)
+Курс: {useful_info["N_D"]}{faculty}{specialization}{email}{group}""",
+reply_markup=markup, protect_content=True)
 
 
 @dp.callback_query(F.data == "Оценки")
@@ -216,19 +279,26 @@ async def user_marks(callback_query, state: FSMContext):
     await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...", reply_markup=ReplyKeyboardRemove())
 
     user_id = callback_query.from_user.id
-    # user_auth_info = select_auth_info(user_id)
     user_auth_info = student.get_token(user_id)
     about_info = student.get_about(user_auth_info)
 
-    # Получаем необработанные оценки
     courses_data = st_marks.get_courses_data(user_id, user_auth_info)
     course_names = st_marks.get_courses_names(courses_data)
     marks = st_marks.get_marks_from_site(user_id, user_auth_info, about_info, courses_data)
     db_marks = st_marks.get_marks(user_id)
 
-    new_marks = set(marks) - set(db_marks)
-    deleted_marks = set(db_marks) - set(marks)
-    # text_marks = st_marks.proccess_marks(user_id, raw_marks, False)
+    # Изменить
+    new_marks = set(db_marks) - set(marks)
+    deleted_marks = set(marks) - set(marks)
+
+    print(new_marks)
+    print(deleted_marks)
+
+    if len(new_marks) != 0:
+        st_marks.insert_new_marks(user_id, list(deleted_marks))
+    if len(deleted_marks) != 0:
+        st_marks.delete_marks(user_id, list(new_marks))
+
     keyboard_list = []
     sort_list = []
     for subject in course_names:
@@ -271,24 +341,28 @@ async def process_name(message, state: FSMContext) -> None:
 
 @dp.callback_query(F.data == "Расписание")
 async def marks(callback_query):
-    print(callback_query.message.chat.id)
     await callback_query.answer(text="Производим запросы...")
 
     group_info = select_group_info(callback_query.from_user.id)
 
     study_group = group_info[0][0]
+    print("Study is " + type(study_group))
     lab_group_one = group_info[0][1]
     lab_group_two = group_info[0][2]
     lab_group_three = group_info[0][3]
     lab_group_four = group_info[0][4]
     faculty_group = group_info[0][5]
 
-    schedule.create_schedule(int(study_group))
+    if not schedule.if_exists(study_group):
+        schedule.create_schedule(study_group)
 
+    # raw_schedule = schedule.get_raw_schedule(study_group)
+    # group_schedule = schedule.process_schedule(raw_schedule, study_group)
     with grequests.Session() as session:
         group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
     json_group_schedule = json.loads(group_schedule.text)
-
+    db_schedule = schedule.get_schedule_from_db(study_group)
+    
 
     today_raw = datetime.today()  # .strftime('%Y-%m-%d')
     yesterday_raw = today_raw - timedelta(1)

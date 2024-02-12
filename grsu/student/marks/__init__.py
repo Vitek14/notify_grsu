@@ -15,7 +15,7 @@ class Marks(Base):
     date = Column(String)
     user_id = Column(Integer)
     
-    from ._marks import get_marks_from_site, get_courses_data, proccess_marks, get_courses_names
+    from ._marks import get_marks_from_site, get_courses_data, get_courses_names
     from ..data.select import get_marks
     from ..data.insert import insert_new_marks
     from ..data.delete import delete_marks
