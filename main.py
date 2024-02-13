@@ -28,7 +28,7 @@ from grsu.student.settings import Settings
 from grsu.schedule import Schedule
 from grsu.exceptions import *
 
-from settings import info_settings
+from settings import settings_dict, settings_buttons
 
 from datetime import datetime
 import locale
@@ -139,7 +139,6 @@ async def attestation(message):
         return
 
     info = get_attestation(result)
-    print(info)
 
     await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
     auth(message.from_user.id, result[0][0], result[0][1])
@@ -158,7 +157,7 @@ async def attestation(message):
 
 
 @dp.message(Command("settings"))
-async def settings(message, state):
+async def settings_command(message, state):
     # bot_message = await message.answer("Получаем ваши настройки...")
     user_id = message.from_user.id
     user_settings = st_settings.get_settings(user_id)
@@ -173,21 +172,32 @@ async def settings(message, state):
     await message.answer(f"""Это меню настроек. Ниже выберите категорию настроек и настройте что вы хотите.""", reply_markup=buttons)
     await state.set_state(StateSettings.category)
 
-@dp.message(StateSettings.category, F.text == "Инфо")
-# @dp.message(F.text.casefold() == "Инфо")
+@dp.message(StateSettings.category)
 async def settings_reply(message, state: FSMContext) -> None:
-    # print(F.text.casefold().attr_)
-    keyboard_list = [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это...")]]
-
+    if message.text == "Убрать это...":
+        await state.clear()
+        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        return
+    # print(message.text)
+    try:
+        keyboard_list = settings_buttons[message.text]
+    except:
+        await message.answer("Неверная настройка")
+        return
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
     user_id = message.from_user.id
     user_settings = st_settings.get_settings(user_id)
-    bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
-Показывать факультет: {user_settings["show_faculty"]}
-Показывать специальность: {user_settings["show_specialization"]}
-Показывать почту: {user_settings["show_email"]}
-Показывать группу: {user_settings["show_group"]}""", reply_markup=buttons)
+    text = ""
+
+    # Перебор значений в словаре, который содержит начальный текст и названий настроек из базы данных(их сопостовление с простым русским языком)
+    for item, value in settings_dict[message.text].items():
+        if item == "text":
+            text = str(text) + str(value)
+            continue
+        text = text + "\n" + item + ": " + str(user_settings[value])
+    bot_message = await message.answer(text, reply_markup=buttons)
     await state.update_data(previous_message=bot_message)
+    await state.update_data(text=message.text)
     await state.set_state(StateSettings.settings)
 
 
@@ -197,85 +207,38 @@ async def info_settings_reply(message, state: FSMContext) -> None:
         await state.clear()
         await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
         return
-    previous_message = await state.get_data()
-    # print(previous_message)
-    # print(previous_message["previous_message"].text)
-    user_id = message.from_user.id
-
-    if message.text in info_settings:
-        settings = st_settings.get_settings(user_id)
-        value = settings[info_settings[message.text]]
-        value ^= 1
-        st_settings.update_setting(user_id, info_settings[message.text], value)
-        keyboard_list = [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это...")]]
-        buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
-        user_settings = st_settings.get_settings(user_id)
-        bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
-Показывать факультет: {user_settings["show_faculty"]}
-Показывать специальность: {user_settings["show_specialization"]}
-Показывать почту: {user_settings["show_email"]}
-Показывать группу: {user_settings["show_group"]}""", reply_markup=buttons)
-        await previous_message["previous_message"].delete()
-        await message.delete()
-        await state.update_data(previous_message=bot_message)
-    # marks = st_marks.get_marks(user_id)
-
-
-@dp.message(StateSettings.category, F.text == "Расписание")
-# @form_router.message(F.text.casefold() == "Расписание")
-async def schedule_settings(message, state: FSMContext) -> None:
-    keyboard_list = [[KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")], [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")], [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")], [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")], [KeyboardButton(text="Показывать тип занятия")]]
-
-    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
-    user_id = message.from_user.id
-    user_settings = st_settings.get_settings(user_id)
-    bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
-Показывать УСР: {user_settings["show_USR"]}
-Показывать адрес: {user_settings["show_adress"]}
-Показывать кабинет: {user_settings["show_room"]}
-Показывать учителя: {user_settings["show_teacher"]}
-Показывать полную дату: {user_settings["show_full_data"]}
-Показывать время начала занятия: {user_settings["show_start_time"]}
-Показывать время конца занятия: {user_settings["show_end_time"]}
-Показывать время факультативные занятия: {user_settings["show_facultative"]}
-Показывать тип занятия: {user_settings["show_lesson_type"]}""", reply_markup=buttons)
-    await state.update_data(previous_message=bot_message)
-    await state.set_state(StateSettings.settings)
-
-
-@dp.message(StateSettings.settings)
-async def schedule_settings_reply(message, state: FSMContext) -> None:
-    if message.text == "Убрать это...":
+    if message.text == "Назад":
         await state.clear()
-        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        await settings_command(message, state)
         return
-    previous_message = await state.get_data()
-    # print(previous_message)
-    # print(previous_message["previous_message"].text)
+    previous_data = await state.get_data()
     user_id = message.from_user.id
 
-    if message.text in info_settings:
-        settings = st_settings.get_settings(user_id)
-        value = settings[info_settings[message.text]]
-        value ^= 1
-        st_settings.update_setting(user_id, info_settings[message.text], value)
-        keyboard_list = [[KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")], [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")], [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")], [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")], [KeyboardButton(text="Показывать тип занятия")]]
-        buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
-        user_settings = st_settings.get_settings(user_id)
-        bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
-Показывать УСР: {user_settings["show_USR"]}
-Показывать адрес: {user_settings["show_adres"]}
-Показывать кабинет: {user_settings["show_room"]}
-Показывать учителя: {user_settings["show_teacher"]}
-Показывать полную дату: {user_settings["show_full_data"]}
-Показывать время начала занятия: {user_settings["show_start_time"]}
-Показывать время конца занятия: {user_settings["show_end_time"]}
-Показывать время факультативные занятия: {user_settings["show_facultative"]}
-Показывать тип занятия: {user_settings["show_lesson_type"]}""", reply_markup=buttons)
-        await previous_message["previous_message"].delete()
-        await message.delete()
-        await state.update_data(previous_message=bot_message)
+    try:
+        setting_name = str(settings_dict[previous_data["text"]][message.text])
+    except:
+        await message.answer(text="Неверная настройка")
+        return
 
+    settings = st_settings.get_settings(user_id)
+    value = settings[setting_name]
+    value ^= 1
+    st_settings.update_setting(user_id, setting_name, value)
+    keyboard_list = settings_buttons[previous_data["text"]]
+    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+    user_settings = st_settings.get_settings(user_id)
+    
+    text = ""
+    for item, value in settings_dict[previous_data["text"]].items():
+        if item == "text":
+            text = str(text) + str(value)
+            continue
+        text = text + "\n" + item + ": " + str(user_settings[value])
+    bot_message = await message.answer(text, reply_markup=buttons)
+    await previous_data["previous_message"].delete()
+    await message.delete()
+    await state.update_data(previous_message=bot_message)
+    # marks = st_marks.get_marks(user_id)
 
 
 @dp.message(Command("info"))
