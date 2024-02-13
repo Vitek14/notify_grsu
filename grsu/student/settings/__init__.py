@@ -16,7 +16,6 @@ class Settings(Base):
     rowid = Column("rowid", Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer)
     show_today_at_end = Column(Integer, nullable=False, default=1)
-    show_USR = Column(Integer, nullable=False, default=1)
     auto_login = Column(Integer, nullable=False, default=1)
     auto_time = Column(Integer, nullable=False, default=1)
     show_faculty = Column(Integer, nullable=False, default=1)
@@ -27,6 +26,15 @@ class Settings(Base):
     send_schedule_notification = Column(Integer, nullable=False, default=1)
     send_homework_notification = Column(Integer, nullable=False, default=1)
     send_update_notification = Column(Integer, nullable=False, default=1)
+    show_USR = Column(Integer, nullable=False, default=1)
+    show_adress = Column(Integer, nullable=False, default=1)
+    show_room = Column(Integer, nullable=False, default=1)
+    show_teacher = Column(Integer, nullable=False, default=1)
+    show_full_data = Column(Integer, nullable=False, default=1)
+    show_start_time = Column(Integer, nullable=False, default=1)
+    show_end_time = Column(Integer, nullable=False, default=1)
+    show_facultative = Column(Integer, nullable=False, default=1)
+    show_lesson_type = Column(Integer, nullable=False, default=1)
 
     def create_settings(self, user_id: int) -> None:
         with Session() as session:

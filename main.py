@@ -53,8 +53,13 @@ class StateMarks(StatesGroup):
 
 class StateSettings(StatesGroup):
     previous_message = State()
+    text = State()
+    buttons = State()
     category = State()
     settings = State()
+
+class StateSchedule(StatesGroup):
+    day = State()
 
 def clear_state(func):
     async def wrapper(message, state: FSMContext):
@@ -161,20 +166,17 @@ async def settings(message, state):
         st_settings.create_settings(user_id)
         user_settings = st_settings.get_settings(user_id)
     
-    keyboard_list = [[KeyboardButton(text="Инфо")], [KeyboardButton(text="Уведомления")], [KeyboardButton(text="Логин")], [KeyboardButton(text="Убрать это...")]]
+    keyboard_list = [[KeyboardButton(text="Инфо")], [KeyboardButton(text="Уведомления")], [KeyboardButton(text="Логин")], [KeyboardButton(text="Расписание")], [KeyboardButton(text="Убрать это...")]]
 
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
 
     await message.answer(f"""Это меню настроек. Ниже выберите категорию настроек и настройте что вы хотите.""", reply_markup=buttons)
     await state.set_state(StateSettings.category)
 
-@dp.message(StateSettings.category)
-@form_router.message(F.text.casefold() == "Инфо")
+@dp.message(StateSettings.category, F.text == "Инфо")
+# @dp.message(F.text.casefold() == "Инфо")
 async def settings_reply(message, state: FSMContext) -> None:
-    # if message.text == "Убрать это...":
-    #     await state.clear()
-    #     await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
-    #     return
+    # print(F.text.casefold().attr_)
     keyboard_list = [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это...")]]
 
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
@@ -217,6 +219,64 @@ async def info_settings_reply(message, state: FSMContext) -> None:
         await message.delete()
         await state.update_data(previous_message=bot_message)
     # marks = st_marks.get_marks(user_id)
+
+
+@dp.message(StateSettings.category, F.text == "Расписание")
+# @form_router.message(F.text.casefold() == "Расписание")
+async def schedule_settings(message, state: FSMContext) -> None:
+    keyboard_list = [[KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")], [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")], [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")], [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")], [KeyboardButton(text="Показывать тип занятия")]]
+
+    buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+    user_id = message.from_user.id
+    user_settings = st_settings.get_settings(user_id)
+    bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
+Показывать УСР: {user_settings["show_USR"]}
+Показывать адрес: {user_settings["show_adress"]}
+Показывать кабинет: {user_settings["show_room"]}
+Показывать учителя: {user_settings["show_teacher"]}
+Показывать полную дату: {user_settings["show_full_data"]}
+Показывать время начала занятия: {user_settings["show_start_time"]}
+Показывать время конца занятия: {user_settings["show_end_time"]}
+Показывать время факультативные занятия: {user_settings["show_facultative"]}
+Показывать тип занятия: {user_settings["show_lesson_type"]}""", reply_markup=buttons)
+    await state.update_data(previous_message=bot_message)
+    await state.set_state(StateSettings.settings)
+
+
+@dp.message(StateSettings.settings)
+async def schedule_settings_reply(message, state: FSMContext) -> None:
+    if message.text == "Убрать это...":
+        await state.clear()
+        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        return
+    previous_message = await state.get_data()
+    # print(previous_message)
+    # print(previous_message["previous_message"].text)
+    user_id = message.from_user.id
+
+    if message.text in info_settings:
+        settings = st_settings.get_settings(user_id)
+        value = settings[info_settings[message.text]]
+        value ^= 1
+        st_settings.update_setting(user_id, info_settings[message.text], value)
+        keyboard_list = [[KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")], [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")], [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")], [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")], [KeyboardButton(text="Показывать тип занятия")]]
+        buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
+        user_settings = st_settings.get_settings(user_id)
+        bot_message = await message.answer(f"""Следующие настройки затрагивают команду /info:
+Показывать УСР: {user_settings["show_USR"]}
+Показывать адрес: {user_settings["show_adres"]}
+Показывать кабинет: {user_settings["show_room"]}
+Показывать учителя: {user_settings["show_teacher"]}
+Показывать полную дату: {user_settings["show_full_data"]}
+Показывать время начала занятия: {user_settings["show_start_time"]}
+Показывать время конца занятия: {user_settings["show_end_time"]}
+Показывать время факультативные занятия: {user_settings["show_facultative"]}
+Показывать тип занятия: {user_settings["show_lesson_type"]}""", reply_markup=buttons)
+        await previous_message["previous_message"].delete()
+        await message.delete()
+        await state.update_data(previous_message=bot_message)
+
+
 
 @dp.message(Command("info"))
 @clear_state
@@ -266,7 +326,6 @@ async def start_command(message, state):
     specialization = ("\nСпециальность: " + useful_info["NNAUCH"]) if user_settings["show_specialization"] == 1 else ""
     email = ("\nEMAIL: " + useful_info["EMAIL"]) if user_settings["show_email"] == 1 else ""
     group = ("\nГруппа: " + useful_info["N_GRYP"]) if user_settings["show_group"] == 1 else ""
-
 
     await bot_message.edit_text(f"""
 ФИО: {useful_info["FIO_R"]}
@@ -340,77 +399,77 @@ async def process_name(message, state: FSMContext) -> None:
 
 
 @dp.callback_query(F.data == "Расписание")
-async def marks(callback_query):
+async def marks(callback_query, state: FSMContext):
     await callback_query.answer(text="Производим запросы...")
 
-    group_info = select_group_info(callback_query.from_user.id)
+    user_id = callback_query.from_user.id
+    group_info = student.get_groups(user_id)
 
-    study_group = group_info[0][0]
-    print("Study is " + type(study_group))
-    lab_group_one = group_info[0][1]
-    lab_group_two = group_info[0][2]
-    lab_group_three = group_info[0][3]
-    lab_group_four = group_info[0][4]
-    faculty_group = group_info[0][5]
+    study_group = group_info["group_0"]
+    lab_group_one = group_info["group_1"]
+    lab_group_two = group_info["group_2"]
+    lab_group_three = group_info["group_3"]
+    lab_group_four = group_info["group_4"]
+    faculty_group = group_info["group_5"]
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
 
-    # raw_schedule = schedule.get_raw_schedule(study_group)
-    # group_schedule = schedule.process_schedule(raw_schedule, study_group)
-    with grequests.Session() as session:
-        group_schedule = session.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={study_group}")
-    json_group_schedule = json.loads(group_schedule.text)
+    raw_schedule = schedule.get_raw_schedule(study_group)
+    group_schedule = schedule.process_schedule(raw_schedule, study_group)
     db_schedule = schedule.get_schedule_from_db(study_group)
+
+    # new_from_web = set(group_schedule) - set(db_schedule)
+    # deleted_from_web = set(db_schedule) - set(group_schedule)
+    # print(new_from_web)
+    # print(deleted_from_web)
+    # print(len(deleted_from_web))
+    print("\n\n\n")
+    print(db_schedule)
+    # db_schedule = schedule.get_schedule_from_db(study_group)
     
 
     today_raw = datetime.today()  # .strftime('%Y-%m-%d')
+    print(today_raw.strftime("%Y-%m-%d"))
+
     yesterday_raw = today_raw - timedelta(1)
     tomorrow_raw = today_raw + timedelta(1)
 
-    today = today_raw.strftime('%Y-%m-%d')
-    yesterday = yesterday_raw.strftime('%Y-%m-%d')
-    tomorrow = tomorrow_raw.strftime('%Y-%m-%d')
+    today = today_raw.strftime("%Y-%m-%d")
+    # yesterday = yesterday_raw.strftime('%Y-%m-%d')
+    # tomorrow = tomorrow_raw.strftime('%Y-%m-%d')
 
     text_lessons = ""
     today_lessons = ""
-    tomorrow_lessons = ""
-    # date_counter = 0
-    for item in json_group_schedule["days"]:
-        print(item["date"])
-        if item["date"] == today:
-            # text_lessons = text_lessons + "\n\n" + "СЕГОДНЯ" + "\n"
-            today_lessons = today_lessons + "\n\n" + "СЕГОДНЯ" + "\n"
-            date_counter = 2
-        elif item["date"] == yesterday:
-            text_lessons = text_lessons + "\n\n" + "Вчера" + "\n"
-            date_counter = 1
-        elif item["date"] == tomorrow:
-            # text_lessons = text_lessons + "\n\n" + "Завтра" + "\n"
-            tomorrow_lessons = tomorrow_lessons + "\n\n" + "Завтра" + "\n"
-            date_counter = 3
-        else:
-            text_lessons = text_lessons + "\n\n" + item["date"] + "\n"
-            date_counter = 0
+    # tomorrow_lessons = ""
 
-        # Перебор для уроков
-        for lesson in item["lessons"]:
-            if (lesson["subgroup"]["id"] == lab_group_one) or (lesson["subgroup"]["id"] == lab_group_two) or (
-                    lesson["subgroup"]["id"] == lab_group_three) or (lesson["subgroup"]["id"] == lab_group_four) or (
-                    lesson["subgroup"]["id"] == faculty_group) or (lesson["subgroup"]["id"] == "0"):
-                if date_counter == 2:
-                    today_lessons = today_lessons + f"{lesson['title']} ({lesson['timeStart']} - " \
-                                                    f"{lesson['timeEnd']}) - {lesson['address']}\n "
-                elif date_counter == 3:
-                    tomorrow_lessons = tomorrow_lessons + f"{lesson['title']} ({lesson['timeStart']} - " \
-                                                          f"{lesson['timeEnd']}) - {lesson['address']}\n "
-                else:
-                    text_lessons = text_lessons + f"{lesson['title']} ({lesson['timeStart']} - " \
-                                                  f"{lesson['timeEnd']}) - {lesson['address']}\n"
-            else:
+    # Получение настроек пользователя
+    user_settings = st_settings.get_settings(user_id)
+
+    # Перебор кортежей из базы данных. Если есть текущая  дата в кортеже, то значит что это урок сегодня есть
+    for lesson in db_schedule:
+        if today in lesson[5]:
+            
+            # Если занятие УСР и у пользователя стоит не показывать УСР, то продолжать перебирать
+            if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
                 continue
+            if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
+                continue
+            
+            text_lessons = text_lessons + "<b>" + lesson[0] + "</b>"
+            lesson_type = lesson[1] if user_settings["show_lesson_type"] == 1 else ""
+            place = lesson[2] if user_settings["show_adress"] == 1 else ""
+            room = lesson[3] if user_settings["show_room"] == 1 else ""
+            teacher = lesson[4] if user_settings["show_teacher"] == 1 else ""
+            date = lesson[5] if user_settings["show_full_data"] == 1 else ""
+            start_time = lesson[7] if user_settings["show_start_time"] == 1 else ""
+            end_time = lesson[8] if user_settings["show_end_time"] == 1 else ""
+            text_lessons = f"{text_lessons}: {lesson_type}. {place}, {room}; {teacher}. {date}. {start_time} - {end_time}\n"
 
-    await callback_query.message.answer(f"{text_lessons}\n{tomorrow_lessons}\n{today_lessons}")
+    await callback_query.message.answer(text_lessons, parse_mode="HTML")
+    # await callback_query.message.answer(f"{text_lessons}\n{tomorrow_lessons}\n{today_lessons}")
+    await state.set_state(StateSchedule.day)
+
 
 
 async def start():

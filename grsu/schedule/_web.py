@@ -28,6 +28,6 @@ def process_schedule(self, raw_schedule: dict, group_id: int) -> list:
             teacher = lesson["teacher"]["fullname"]
             start_time = lesson["timeStart"]
             end_time = lesson["timeEnd"]
-            subgroup_id = lesson["subgroup"]["id"]
+            subgroup_id = int(lesson["subgroup"]["id"])
             schedule.append((name, lesson_type, place, room, teacher, date, day_num, start_time, end_time, group_id, subgroup_id))
     return schedule

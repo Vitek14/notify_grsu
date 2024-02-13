@@ -16,7 +16,7 @@ class Schedule(Base):
     room = Column(String)
     teacher = Column(String)
     date = Column(String)
-    day = Column(String)
+    day = Column(Integer)
     start_time = Column(String)
     end_time = Column(String)
     group_id = Column(Integer)
@@ -53,9 +53,9 @@ class Schedule(Base):
         Session = sessionmaker(engine)
         with Session() as session:
             # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
-            schedule = session.execute(select(Schedule.rowid, Schedule.name, Schedule.lesson_type,
-            Schedule.place, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time,
-            Schedule.end_time, Schedule.group_id).where(Schedule.group_id == group_id)).all()
+            schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+            Schedule.place, Schedule.room, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time  ,
+            Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).where(Schedule.group_id == group_id)).all()
         return schedule
 
     def create_schedule(self, group_id: int) -> list:
@@ -65,8 +65,9 @@ class Schedule(Base):
 
         raw_schedule = Schedule().get_raw_schedule(group_id)
         schedule = Schedule().process_schedule(raw_schedule, group_id)
+        actual_data = [(None, *t) for i, t in enumerate(schedule)]
         with Session() as session:
-            session.execute(insert(Schedule).values(schedule))
+            session.execute(insert(Schedule).values(actual_data))
             session.commit()
         return schedule
 

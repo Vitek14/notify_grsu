@@ -18,12 +18,12 @@ class Student(Base):
     MoodleSession = Column(String)
     tabnum = Column(String)
     lang = Column(String)
-    group_0 = Column(String)
-    group_1 = Column(String)
-    group_2 = Column(String)
-    group_3 = Column(String)
-    group_4 = Column(String)
-    group_5 = Column(String)
+    group_0 = Column(Integer)
+    group_1 = Column(Integer)
+    group_2 = Column(Integer)
+    group_3 = Column(Integer)
+    group_4 = Column(Integer)
+    group_5 = Column(Integer)
     tg_id = Column(Integer)
 
     from ._auth import auth, about
