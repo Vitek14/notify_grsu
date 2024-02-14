@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import grequests
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, reply_keyboard_markup
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, callback_query, reply_keyboard_markup
 import asyncio
 # Для нормальной обработки контента
 import json
@@ -362,24 +362,31 @@ async def process_name(message, state: FSMContext) -> None:
 
 
 @dp.callback_query(F.data == "Расписание")
-async def marks(callback_query, state: FSMContext):
-    await callback_query.answer(text="Производим запросы...")
-
+async def schedule_button(callback_query, state: FSMContext):
+    # await callback_query.answer(text="Производим запросы...")
+    data = await state.get_data()
+    print(data)
+    try:
+        current_day = data["day"]
+    except KeyError:
+        current_day = datetime.today()
     user_id = callback_query.from_user.id
     group_info = student.get_groups(user_id)
 
     study_group = group_info["group_0"]
-    lab_group_one = group_info["group_1"]
-    lab_group_two = group_info["group_2"]
-    lab_group_three = group_info["group_3"]
-    lab_group_four = group_info["group_4"]
-    faculty_group = group_info["group_5"]
+    lab_groups= [group_info["group_1"], group_info["group_2"], group_info["group_3"],
+    group_info["group_4"], group_info["group_5"]]
+    # group_info["group_1"]
+    # lab_group_two = group_info["group_2"]
+    # lab_group_three = group_info["group_3"]
+    # lab_group_four = group_info["group_4"]
+    # faculty_group = group_info["group_5"]
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
 
-    raw_schedule = schedule.get_raw_schedule(study_group)
-    group_schedule = schedule.process_schedule(raw_schedule, study_group)
+    # raw_schedule = schedule.get_raw_schedule(study_group)
+    # group_schedule = schedule.process_schedule(raw_schedule, study_group)
     db_schedule = schedule.get_schedule_from_db(study_group)
 
     # new_from_web = set(group_schedule) - set(db_schedule)
@@ -387,29 +394,18 @@ async def marks(callback_query, state: FSMContext):
     # print(new_from_web)
     # print(deleted_from_web)
     # print(len(deleted_from_web))
-    print("\n\n\n")
-    print(db_schedule)
     # db_schedule = schedule.get_schedule_from_db(study_group)
-    
 
-    today_raw = datetime.today()  # .strftime('%Y-%m-%d')
-    print(today_raw.strftime("%Y-%m-%d"))
 
-    yesterday_raw = today_raw - timedelta(1)
-    tomorrow_raw = today_raw + timedelta(1)
-
-    today = today_raw.strftime("%Y-%m-%d")
-    # yesterday = yesterday_raw.strftime('%Y-%m-%d')
-    # tomorrow = tomorrow_raw.strftime('%Y-%m-%d')
-
+    today = current_day.strftime("%Y-%m-%d")
     text_lessons = ""
-    today_lessons = ""
-    # tomorrow_lessons = ""
+    # Отображение как "среда, 14 фев."
+    day_text = current_day.strftime("%A, %d %b:\n")
 
     # Получение настроек пользователя
     user_settings = st_settings.get_settings(user_id)
-
     # Перебор кортежей из базы данных. Если есть текущая  дата в кортеже, то значит что это урок сегодня есть
+    all_lessons = ""
     for lesson in db_schedule:
         if today in lesson[5]:
             
@@ -418,20 +414,73 @@ async def marks(callback_query, state: FSMContext):
                 continue
             if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
                 continue
+            if lesson[10] and not lesson[10] in lab_groups:
+                continue
             
-            text_lessons = text_lessons + "<b>" + lesson[0] + "</b>"
-            lesson_type = lesson[1] if user_settings["show_lesson_type"] == 1 else ""
-            place = lesson[2] if user_settings["show_adress"] == 1 else ""
-            room = lesson[3] if user_settings["show_room"] == 1 else ""
-            teacher = lesson[4] if user_settings["show_teacher"] == 1 else ""
-            date = lesson[5] if user_settings["show_full_data"] == 1 else ""
-            start_time = lesson[7] if user_settings["show_start_time"] == 1 else ""
-            end_time = lesson[8] if user_settings["show_end_time"] == 1 else ""
-            text_lessons = f"{text_lessons}: {lesson_type}. {place}, {room}; {teacher}. {date}. {start_time} - {end_time}\n"
+            elements = []
+            text_lessons = "<b>" + lesson[0] + "</b>. "
+            if user_settings["show_lesson_type"] == 1:
+                elements.append(lesson[1])
+            if user_settings["show_adress"] == 1:
+                elements.append(lesson[2])
+            if user_settings["show_room"] == 1:
+                elements.append(lesson[3])
+            if user_settings["show_teacher"] == 1:
+                elements.append(lesson[4])
+            if user_settings["show_full_data"] == 1:
+                elements.append(lesson[5])
+            if user_settings["show_start_time"] == 1:
+                elements.append(lesson[6])
+            if user_settings["show_end_time"] == 1:
+                elements.append(lesson[7])
+            print(elements)
+            normal_lessons = ", ".join(elements)
+            all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
 
-    await callback_query.message.answer(text_lessons, parse_mode="HTML")
-    # await callback_query.message.answer(f"{text_lessons}\n{tomorrow_lessons}\n{today_lessons}")
+# lesson_type = all_text.append(lesson[1] if user_settings["show_lesson_type"] == 1 else "")
+#             place = (" ," + lesson[2]) if user_settings["show_adress"] == 1 else ""
+#             room = lesson[3] if user_settings["show_room"] == 1 else ""
+#             teacher = lesson[4] if user_settings["show_teacher"] == 1 else ""
+#             date = lesson[5] if user_settings["show_full_data"] == 1 else ""
+#             start_time = lesson[7] if user_settings["show_start_time"] == 1 else ""
+#             end_time = lesson[8] if user_settings["show_end_time"] == 1 else ""
+#             text_lessons = f"{text_lessons}: {lesson_type}. {place}, {room}; {teacher}. {date}. {start_time} - {end_time}\n"
+
+
+
+    buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")], [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
+    keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+    if len(all_lessons) == 0:
+        all_lessons = "Свободен, как птица"
+
+    if str(type(callback_query)) == "<class 'aiogram.types.callback_query.CallbackQuery'>":
+        await callback_query.message.answer(text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        await bot.send_message(chat_id=user_id, text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(StateSchedule.day)
+    await state.update_data(day=current_day)
+
+@dp.message(StateSchedule.day)
+async def schedule_selected(message, state: FSMContext) -> None:
+    if message.text == "Убрать это...":
+        await state.clear()
+        await message.answer(text="Хорошо, убрали кнопки для вас!", reply_markup=ReplyKeyboardRemove())
+        return
+    if message.text == "Следующий день":
+        previous_day = await state.get_data()
+        await state.update_data(day=previous_day["day"] + timedelta(1))
+        await schedule_button(message, state)
+    if message.text == "Предыдущий день":
+        previous_day = await state.get_data()
+        await state.update_data(day=previous_day["day"] - timedelta(1))
+        await schedule_button(message, state)
+    if message.text == "Сегодня":
+        previous_day = await state.get_data()
+        await state.update_data(day=datetime.today())
+        await schedule_button(message, state)
+
+
 
 
 
