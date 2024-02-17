@@ -23,6 +23,7 @@ def get_raw_schedule(self, groups_id: list) -> list:
     return responses_with_groups
 
 def process_schedule(self, raw_schedule: list) -> list:
+    #TEST
     group_schedule = []
     for group_schedule in raw_schedule:
         group_id = group_schedule[0]
