@@ -4,6 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy import update, insert, select
 
+from grsu.student import Student
+
 Base = declarative_base()
 
 class Schedule(Base):
@@ -42,7 +44,7 @@ class Schedule(Base):
 
     from ._web import get_raw_schedule, process_schedule
 
-    def get_schedule_from_db(self, group_id: int) -> list:
+    def get_schedule_from_db(self) -> list:
         """
         Функция выдаёт всё расписание по группе
         :group_id: ID группы, для которого искать расписание
@@ -55,7 +57,7 @@ class Schedule(Base):
             # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
             schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
             Schedule.place, Schedule.room, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time  ,
-            Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).where(Schedule.group_id == group_id)).all()
+            Schedule.end_time, Schedule.group_id, Schedule.subgroup_id)).all()
         return schedule
 
     def create_schedule(self, group_id: int) -> list:
@@ -71,18 +73,49 @@ class Schedule(Base):
             session.commit()
         return schedule
 
-    def get_new_lessons(self, schedule_db: list, schedule_web: list, group_id: int) -> list:
+    def get_groups(self) -> list:
+        """
+        Вернёт лист, в котором будут находиться все ОСНОВНЫЕ группы(study_group)
+        По которым следует искать расписания
+        """
+        engine = create_engine('sqlite:///user.db')
+        Base.metadata.create_all(engine)
+        # Объявляем объект сессии
+        Session = sessionmaker(engine)
+        groups_id = []
+        with Session() as session:
+            schedule_groups = session.query(Student.group_0).all()
+        for group in schedule_groups:
+            groups_id.append(group[0])
+        return list(set(groups_id))  # Нужно, чтобы убрать дупликаты
+            
+
+    def get_new_lessons(self, groups_ids: list) -> None:
         """
         Функция выведет предметы, которые добавились в расписание
-        :schedule_db: Содержит расписание, взятое из базы данных
-        :schedule_web: Содержит расписание, взятое с сайта
+        :groups_ids: Лист, содержащий id каждой группы
         """
+        raw_schedule = self.get_raw_schedule(groups_ids)
+        group_schedule = self.process_schedule(raw_schedule)
+        db_schedule = self.get_schedule_from_db()
+
+        new_from_web = set(group_schedule) - set(db_schedule)
+        deleted_from_web = set(db_schedule) - set(group_schedule)
+        dont_tell_list  = []  # То, что нужно удалить, но не сообщать пользователю
+        print(new_from_web)
+        print(deleted_from_web)
+        print(len(deleted_from_web))
+
+        # Сначала нужен цикл, который 
+
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
         Session = sessionmaker(engine)
 
-        with Session() as session:
-            schedule = session.query(Schedule).filter_by(group_id=group_id).all()
-            print(schedule)
+        # Нужно фильтровать! Там где deleted_from_web, то если дата прошлая, то не отправлять сообщения
+
+        # with Session() as session:
+            # schedule = session.query(Schedule).filter_by(group_id=group_id).all()
+            # print(schedule)
 
 

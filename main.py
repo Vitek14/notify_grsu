@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import grequests
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, callback_query, reply_keyboard_markup
 import asyncio
 # Для нормальной обработки контента
@@ -47,6 +48,7 @@ st_settings = Settings()
 form_router = Router()
 
 dp = Dispatcher()
+scheduler = AsyncIOScheduler()
 
 class StateMarks(StatesGroup):
     subject = State()
@@ -365,7 +367,6 @@ async def process_name(message, state: FSMContext) -> None:
 async def schedule_button(callback_query, state: FSMContext):
     # await callback_query.answer(text="Производим запросы...")
     data = await state.get_data()
-    print(data)
     try:
         current_day = data["day"]
     except KeyError:
@@ -376,11 +377,6 @@ async def schedule_button(callback_query, state: FSMContext):
     study_group = group_info["group_0"]
     lab_groups= [group_info["group_1"], group_info["group_2"], group_info["group_3"],
     group_info["group_4"], group_info["group_5"]]
-    # group_info["group_1"]
-    # lab_group_two = group_info["group_2"]
-    # lab_group_three = group_info["group_3"]
-    # lab_group_four = group_info["group_4"]
-    # faculty_group = group_info["group_5"]
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
@@ -405,7 +401,7 @@ async def schedule_button(callback_query, state: FSMContext):
     # Получение настроек пользователя
     user_settings = st_settings.get_settings(user_id)
     # Перебор кортежей из базы данных. Если есть текущая  дата в кортеже, то значит что это урок сегодня есть
-    all_lessons = ""
+    all_lessons = ""  # Что отправится пользователю
     for lesson in db_schedule:
         if today in lesson[5]:
             
@@ -414,9 +410,12 @@ async def schedule_button(callback_query, state: FSMContext):
                 continue
             if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
                 continue
+            
+            # Если студента нет в этой группе, то переходить к след занятию
             if lesson[10] and not lesson[10] in lab_groups:
                 continue
             
+            # Лист в котором хранится все данные об уроке, кроме его названия
             elements = []
             text_lessons = "<b>" + lesson[0] + "</b>. "
             if user_settings["show_lesson_type"] == 1:
@@ -433,31 +432,24 @@ async def schedule_button(callback_query, state: FSMContext):
                 elements.append(lesson[6])
             if user_settings["show_end_time"] == 1:
                 elements.append(lesson[7])
-            print(elements)
+            
+            # Перевести лист elements в строковый тип, разделяя данные с помощью ", "
             normal_lessons = ", ".join(elements)
             all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
-
-# lesson_type = all_text.append(lesson[1] if user_settings["show_lesson_type"] == 1 else "")
-#             place = (" ," + lesson[2]) if user_settings["show_adress"] == 1 else ""
-#             room = lesson[3] if user_settings["show_room"] == 1 else ""
-#             teacher = lesson[4] if user_settings["show_teacher"] == 1 else ""
-#             date = lesson[5] if user_settings["show_full_data"] == 1 else ""
-#             start_time = lesson[7] if user_settings["show_start_time"] == 1 else ""
-#             end_time = lesson[8] if user_settings["show_end_time"] == 1 else ""
-#             text_lessons = f"{text_lessons}: {lesson_type}. {place}, {room}; {teacher}. {date}. {start_time} - {end_time}\n"
-
-
 
     buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")], [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
     keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
+    # Если нет уроков, то студент свободен
     if len(all_lessons) == 0:
-        all_lessons = "Свободен, как птица"
+        all_lessons = "Спать: 00:00-23:59"
 
+    # В зависимости от того, как вызвана функция, выполнять разные действия
     if str(type(callback_query)) == "<class 'aiogram.types.callback_query.CallbackQuery'>":
         await callback_query.message.answer(text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
     else:
         await bot.send_message(chat_id=user_id, text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
+    # Выставить FSM и данные о текущем ВЫБРАННОМ дне
     await state.set_state(StateSchedule.day)
     await state.update_data(day=current_day)
 
@@ -480,12 +472,14 @@ async def schedule_selected(message, state: FSMContext) -> None:
         await state.update_data(day=datetime.today())
         await schedule_button(message, state)
 
-
-
-
+def test():
+    print("Hi")
 
 async def start():
     print("Бот готов к работе")
+    job = scheduler.add_job(test, "interval", seconds=2)
+    scheduler.start()
+    # job.
     # asyncio.create_task(timer(bot, 300))
     await dp.start_polling(bot)
 
