@@ -43,6 +43,13 @@ def get_groups(self, tg_id: int) -> dict:
 
     return groups_info
 
+def get_groups_all(self):
+    Student = self.__class__
+    with Session() as session:
+        groups_info = session.execute(select(Student.group_0, Student.group_1, Student.group_2, Student.group_3, Student.group_4, Student.group_5, Student.tg_id)).all() # type: ignore
+
+    return groups_info
+
 def get_marks(self, user_id: int) -> Sequence:
 
     Marks = self.__class__

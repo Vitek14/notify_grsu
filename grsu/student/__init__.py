@@ -27,7 +27,7 @@ class Student(Base):
     tg_id = Column(Integer)
 
     from ._auth import auth, about
-    from .data.select import get_login, get_groups, get_token
+    from .data.select import get_login, get_groups, get_token, get_groups_all
     from ._parse_info import get_about, get_attestation
 
     def refresh_token(self, new_token: dict, tg_id: int) -> None:

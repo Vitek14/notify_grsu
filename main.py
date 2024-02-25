@@ -263,10 +263,10 @@ async def start_command(message, state):
 
     try:
         # САЙТ ИЗМЕНИЛИ В ХУДШУЮ СТОРОНУ! СЛЕДУЮЩИХ СТРОК НЕ ДОЛЖНО БЫЛО БЫТЬ!!
-        login_info = student.get_login(user_id)
-        new_token = student.auth(login_info["username"], login_info["password"])
-        student.refresh_token(new_token, user_id)
-        about_info = student.get_about(new_token)
+        # login_info = student.get_login(user_id)
+        # new_token = student.auth(login_info["username"], login_info["password"])
+        # student.refresh_token(new_token, user_id)
+        # about_info = student.get_about(new_token)
 
 
         about_info["userInfo"]
@@ -380,62 +380,23 @@ async def schedule_button(callback_query, state: FSMContext):
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
+    groups_ids = schedule.get_groups()
 
-    # raw_schedule = schedule.get_raw_schedule(study_group)
-    # group_schedule = schedule.process_schedule(raw_schedule, study_group)
-    db_schedule = schedule.get_schedule_from_db(study_group)
+    # new_notify, deleted_notify, dont_notify = schedule.get_new_lessons(groups_ids)
 
-    # new_from_web = set(group_schedule) - set(db_schedule)
-    # deleted_from_web = set(db_schedule) - set(group_schedule)
-    # print(new_from_web)
-    # print(deleted_from_web)
-    # print(len(deleted_from_web))
-    # db_schedule = schedule.get_schedule_from_db(study_group)
+    # schedule.update_db(new_notify, deleted_notify, dont_notify)
+    # await schedule.notify(new_notify, deleted_notify, bot)
 
-
+    schedule_db = schedule.get_student_schedule_from_db(study_group)
+    # user_settings = st_settings.get_settings(user_id)
     today = current_day.strftime("%Y-%m-%d")
+    student_groups = [(study_group, *lab_groups, user_id, today)]
+    all_lessons = schedule.get_schedule_text(schedule_db, student_groups, False)[0]["text"]
+
     text_lessons = ""
     # Отображение как "среда, 14 фев."
     day_text = current_day.strftime("%A, %d %b:\n")
-
-    # Получение настроек пользователя
-    user_settings = st_settings.get_settings(user_id)
-    # Перебор кортежей из базы данных. Если есть текущая  дата в кортеже, то значит что это урок сегодня есть
-    all_lessons = ""  # Что отправится пользователю
-    for lesson in db_schedule:
-        if today in lesson[5]:
-            
-            # Если занятие УСР и у пользователя стоит не показывать УСР, то продолжать перебирать
-            if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
-                continue
-            if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
-                continue
-            
-            # Если студента нет в этой группе, то переходить к след занятию
-            if lesson[10] and not lesson[10] in lab_groups:
-                continue
-            
-            # Лист в котором хранится все данные об уроке, кроме его названия
-            elements = []
-            text_lessons = "<b>" + lesson[0] + "</b>. "
-            if user_settings["show_lesson_type"] == 1:
-                elements.append(lesson[1])
-            if user_settings["show_adress"] == 1:
-                elements.append(lesson[2])
-            if user_settings["show_room"] == 1:
-                elements.append(lesson[3])
-            if user_settings["show_teacher"] == 1:
-                elements.append(lesson[4])
-            if user_settings["show_full_data"] == 1:
-                elements.append(lesson[5])
-            if user_settings["show_start_time"] == 1:
-                elements.append(lesson[6])
-            if user_settings["show_end_time"] == 1:
-                elements.append(lesson[7])
-            
-            # Перевести лист elements в строковый тип, разделяя данные с помощью ", "
-            normal_lessons = ", ".join(elements)
-            all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
+        
 
     buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")], [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
     keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -477,8 +438,8 @@ def test():
 
 async def start():
     print("Бот готов к работе")
-    job = scheduler.add_job(test, "interval", seconds=2)
-    scheduler.start()
+    # job = scheduler.add_job(test, "interval", seconds=2)
+    # scheduler.start()
     # job.
     # asyncio.create_task(timer(bot, 300))
     await dp.start_polling(bot)
