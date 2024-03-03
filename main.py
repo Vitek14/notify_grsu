@@ -380,12 +380,6 @@ async def schedule_button(callback_query, state: FSMContext):
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
-    groups_ids = schedule.get_groups()
-
-    # new_notify, deleted_notify, dont_notify = schedule.get_new_lessons(groups_ids)
-
-    # schedule.update_db(new_notify, deleted_notify, dont_notify)
-    # await schedule.notify(new_notify, deleted_notify, bot)
 
     schedule_db = schedule.get_student_schedule_from_db(study_group)
     # user_settings = st_settings.get_settings(user_id)
@@ -433,13 +427,10 @@ async def schedule_selected(message, state: FSMContext) -> None:
         await state.update_data(day=datetime.today())
         await schedule_button(message, state)
 
-def test():
-    print("Hi")
-
 async def start():
     print("Бот готов к работе")
-    # job = scheduler.add_job(test, "interval", seconds=2)
-    # scheduler.start()
+    job = scheduler.add_job(schedule.notify, "interval", minutes=2, args=[bot])
+    scheduler.start()
     # job.
     # asyncio.create_task(timer(bot, 300))
     await dp.start_polling(bot)

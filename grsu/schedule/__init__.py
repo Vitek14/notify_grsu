@@ -171,8 +171,19 @@ class Schedule(Base):
                     session.query(Schedule).filter_by(name=lesson[0], date=lesson[5], group_id=lesson[9]).delete()
             session.commit()
 
-    def get_schedule_text(self, lessons, student_groups, is_notify: bool) -> list:
+
+    def get_schedule_text(self, lessons: list, student_groups: list, is_notify: bool) -> list:
+        """
+        Вернёт лист с текстом расписания и id студента, которому должно быть отправлено этот текст
+        :lessons: Расписание из базы данных или API
+        :student_groups: Все студенты
+        :is_notify: Если этот должно быть отправлено как оповещение
+        """
         student_notification = []
+
+        # Сортировка по времени
+        lessons = sorted(lessons, key=lambda x: x[7])
+
         # Для каждого студента перебираем
         for student in student_groups:
             user_settings = settings.get_settings(student[6])
@@ -211,9 +222,15 @@ class Schedule(Base):
                     if user_settings["show_full_data"] == 1:
                         elements.append(lesson[5])
                     if user_settings["show_start_time"] == 1:
-                        elements.append(str(lesson[6]))
-                    if user_settings["show_end_time"] == 1:
                         elements.append(str(lesson[7]))
+                    if user_settings["show_end_time"] == 1:
+                        elements.append(str(lesson[8]))
+                    if is_notify:
+                        current_date = datetime.strptime(lesson[5], "%Y-%m-%d")
+                        # strftime("%A, %d %b
+                        text_date = current_date.strftime(" (%A, %d %b.)")
+                        elements.append(text_date)
+
                     
                     # Перевести лист elements в строковый тип, разделяя данные с помощью ", "
                     normal_lessons = ", ".join(elements)
@@ -224,11 +241,14 @@ class Schedule(Base):
                     "id": student[6]
                 }
             )
-            print(student_notification)
             return student_notification
 
 
-    async def notify(self, new_notify, deleted_notify, bot) -> None:
+    async def notify(self, bot) -> None:
+        groups_ids = self.get_groups()
+        new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
+        self.update_db(new_notify, deleted_notify, dont_notify)
+
         student_groups = student.get_groups_all()
         new_notify_text = self.get_schedule_text(new_notify, student_groups, True)
         deleted_notify_text = self.get_schedule_text(deleted_notify, student_groups, True)
