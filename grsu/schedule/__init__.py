@@ -4,6 +4,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy import update, insert, select
+
+import PIL
+from PIL import Image, ImageDraw, ImageFont
+
 import datetime  # Для проверки даты(что неделя уже не прошла)
 
 from datetime import datetime, timedelta
@@ -171,6 +175,34 @@ class Schedule(Base):
                     session.query(Schedule).filter_by(name=lesson[0], date=lesson[5], group_id=lesson[9]).delete()
             session.commit()
 
+    def get_schedule_raw_image(self, lessons) -> Image.Image:
+        """
+        Делает стандартную картинку расписания с заданным кол-во занятий
+        """
+
+        # Открываем исходное изображение
+        im = Image.open("grsu/schedule/images/schedule.png")
+
+        # Задаем координаты для вырезаемой области
+        left = 0
+        top = 0
+        right = 1072
+        lesson_pixels = 195
+        bottom = 2000 - (8 - lessons) * lesson_pixels
+
+        # Вырезаем область из исходного изображения
+        im1 = im.crop((left, top, right, bottom))
+
+        # Открываем второе изображение, которое хотим вставить
+
+        im2 = Image.open("grsu/schedule/images/border.png")
+
+        # Вставляем второе изображение в вырезанную область
+        im1.paste(im2, (left, bottom-126))
+
+        # # Показываем итоговое изображение
+        # im1.show()
+        return im1
 
     def get_schedule_text(self, lessons: list, student_groups: list, is_notify: bool) -> list:
         """
@@ -193,6 +225,7 @@ class Schedule(Base):
             all_lessons = ""
 
             # Для каждого урока
+            real_lessons = 0
             for lesson in lessons:
                 # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
                 if lesson[9] == student[0] or lesson[10] in lab_groups:
@@ -235,6 +268,28 @@ class Schedule(Base):
                     # Перевести лист elements в строковый тип, разделяя данные с помощью ", "
                     normal_lessons = ", ".join(elements)
                     all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
+
+                    real_lessons += 1  # Увеличиваем кол-во занятий для картинки. Нельзя использовать len(lessons), т.к возможно пользователь выбрал не показывать УСР
+
+            # ЧАСТЬ КОДА ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЕМ. В БУДУЩЕМ ТРЕБУЕТСЯ ИЗМЕНИТЬ
+
+
+            raw_image = self.get_schedule_raw_image(real_lessons)
+
+            draw = ImageDraw.Draw(raw_image)  
+  
+            # specified font size 
+            font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)  
+            
+            text = datetime.today().strftime("%d.%m.%Y")
+            
+            # drawing text size 
+            draw.text((715+103, 174), text, fill=(0,0,0,255), font = font, align ="left", anchor="ma")
+
+            
+
+            # ЗДЕСЬ ЗАКАНЧИВАЕТСЯ ЧАСТЬ КОДЫ С ИЗОБРАЖЕНИЕМ
+
             student_notification.append(
                 {
                     "text": all_lessons,

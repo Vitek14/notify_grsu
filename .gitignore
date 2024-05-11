@@ -8,3 +8,6 @@ functions/__pycache__/parse_marks.cpython-310.pyc
 test.py
 __pycache__/
 .idea/discord.xml
+grsu-env
+.vscode
+build

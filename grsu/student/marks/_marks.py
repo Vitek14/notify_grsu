@@ -8,6 +8,9 @@ from sqlalchemy.orm import sessionmaker
 from ..data.select import get_marks
 from ..data.delete import delete_marks
 from ..data.insert import insert_new_marks
+from settings import proxy_list_http, proxy_list_https
+from random import choice
+
 
 Base = declarative_base()
 
@@ -25,7 +28,7 @@ def get_courses_data(self, user_id: int, cookies: dict):
         all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
                 "method": "getCoursesData"
             }, cookies=cookies)
-        all_courses_json = json.loads(all_courses.text)["1"]["1"]
+        all_courses_json = json.loads(all_courses.text)["1"]["2"]
         return all_courses_json
 
 def get_courses_names(self, all_courses: list) -> list:
@@ -52,7 +55,7 @@ def get_marks_from_site(self, user_id: int, cookies: dict, student_info: dict, a
             "method": "getPerformanceData",
             "args[tabnum]": tabnum,
             "args[kdisc]": course_id,
-            "args[semester]": "1",
+            "args[semester]": "2",
             "args[year]": "2023",
             "args[lang]": "6"
         }, headers={
@@ -75,7 +78,6 @@ def get_marks_from_site(self, user_id: int, cookies: dict, student_info: dict, a
     # Следующий код анализирует полученные ответы(responses) и добавляет в ЛИСТ КОРТЕЖИ из оценок с сайта
     marks_from_site = []
     for url in responses:
-        print("peeeee")
         subject_info = json.loads(url.text)
 
         # Проверяем существует ли предмет
