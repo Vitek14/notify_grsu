@@ -16,6 +16,8 @@ from aiogram.filters.command import Command
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 
+from aiogram.types import BufferedInputFile
+
 # Импорт функций
 from functions.auth import auth
 from functions.notifications import timer
@@ -35,7 +37,7 @@ from datetime import datetime
 import locale
 
 # Устанавливаем русскую локализацию
-locale.setlocale(locale.LC_TIME, 'ru')
+locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
 
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
@@ -384,8 +386,12 @@ async def schedule_button(callback_query, state: FSMContext):
     schedule_db = schedule.get_student_schedule_from_db(study_group)
     # user_settings = st_settings.get_settings(user_id)
     today = current_day.strftime("%Y-%m-%d")
-    student_groups = [(study_group, *lab_groups, user_id, today)]
-    all_lessons = schedule.get_schedule_text(schedule_db, student_groups, False)[0]["text"]
+    student_tuple = (study_group, *lab_groups, user_id, today)
+    student_groups = [student_tuple]
+    all_raw_lessons = schedule.get_schedule_text(schedule_db, student_groups, False)
+    all_lessons = all_raw_lessons[0]["text"]
+    print(all_raw_lessons)
+    schedule_photo = schedule.get_schedule_photo(student_tuple, schedule_db, all_raw_lessons[0]["real_lessons"])
 
     text_lessons = ""
     # Отображение как "среда, 14 фев."
@@ -399,11 +405,16 @@ async def schedule_button(callback_query, state: FSMContext):
     if len(all_lessons) == 0:
         all_lessons = "Спать: 00:00-23:59"
 
+    # Загружаем изображение на сервера телеграмм
+    telegram_photo = BufferedInputFile(schedule_photo.read(), filename="schedule.png")
+    # print(schedule_photo)
     # В зависимости от того, как вызвана функция, выполнять разные действия
     if str(type(callback_query)) == "<class 'aiogram.types.callback_query.CallbackQuery'>":
         await callback_query.message.answer(text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
+        await bot.send_photo(chat_id=user_id, photo=telegram_photo, reply_markup=keyboard, parse_mode="HTML")
     else:
         await bot.send_message(chat_id=user_id, text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
+        await bot.send_photo(chat_id=user_id, photo=telegram_photo, reply_markup=keyboard, parse_mode="HTML")
     # Выставить FSM и данные о текущем ВЫБРАННОМ дне
     await state.set_state(StateSchedule.day)
     await state.update_data(day=current_day)

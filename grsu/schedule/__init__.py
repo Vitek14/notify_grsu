@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy import update, insert, select
-
+from io import BytesIO
 import PIL
 from PIL import Image, ImageDraw, ImageFont
 
@@ -219,7 +219,6 @@ class Schedule(Base):
         # Для каждого студента перебираем
         for student in student_groups:
             user_settings = settings.get_settings(student[6])
-            print(student)
             lab_groups = student[1:5]
             print("LAB GROUPS: " + str(lab_groups))
             all_lessons = ""
@@ -271,35 +270,99 @@ class Schedule(Base):
 
                     real_lessons += 1  # Увеличиваем кол-во занятий для картинки. Нельзя использовать len(lessons), т.к возможно пользователь выбрал не показывать УСР
 
-            # ЧАСТЬ КОДА ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЕМ. В БУДУЩЕМ ТРЕБУЕТСЯ ИЗМЕНИТЬ
-
-
-            raw_image = self.get_schedule_raw_image(real_lessons)
-
-            draw = ImageDraw.Draw(raw_image)  
-  
-            # specified font size 
-            font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)  
-            
-            text = datetime.today().strftime("%d.%m.%Y")
-            
-            # drawing text size 
-            draw.text((715+103, 174), text, fill=(0,0,0,255), font = font, align ="left", anchor="ma")
-
-            
-
-            # ЗДЕСЬ ЗАКАНЧИВАЕТСЯ ЧАСТЬ КОДЫ С ИЗОБРАЖЕНИЕМ
-
             student_notification.append(
                 {
                     "text": all_lessons,
-                    "id": student[6]
+                    "id": student[6],
+                    "real_lessons": real_lessons
                 }
             )
+
+            # Почему-то при проверке 2 фотки показывает, вместо одной
             return student_notification
 
+    def get_schedule_photo(self, student: tuple, lessons: list, real_lessons: int):
+        """
+        Функция создаст фото с расписанием текущего дня
+        """
+        raw_image = self.get_schedule_raw_image(real_lessons)
+
+        # Взять настройки студента по его id
+        user_settings = settings.get_settings(student[6])
+
+        draw = ImageDraw.Draw(raw_image)
+
+        # specified font size 
+        font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)  
+        
+        date = datetime.today().strftime("%d.%m.%Y")
+        
+        # drawing text size 
+        draw.text((715+103, 174), date, fill=(0,0,0,255), font = font, align ="left", anchor="ma")
+
+        datetime_font = ImageFont.truetype("grsu/schedule/images/OpenSans-Bold.ttf", 24)  
+        lesson_name_font = ImageFont.truetype("grsu/schedule/images/OpenSans-Bold.ttf", 28)
+        lesson_text = ImageFont.truetype("grsu/schedule/images/OpenSans-Regular.ttf", 24)
+
+
+        lesson_name_px = 267
+        lesson_name_py = 384
+
+        lesson_type_py = 424
+
+        lesson_time_py = 454
+
+        lesson_room_px = 140
+        lesson_room_py = 420
+        lab_groups = student[1:5]
+        for lesson in lessons:
+            # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
+            if lesson[9] == student[0] or lesson[10] in lab_groups:
+                if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
+                        continue
+                if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
+                    continue
+                    
+                    # Если студента нет в этой группе, то переходить к след занятию
+                if lesson[10] and not lesson[10] in lab_groups:
+                    continue
+                    
+                # Лист в котором хранится все данные об уроке, кроме его названия
+                # elements = []
+                # text_lessons = "<b>" + lesson[0] + "</b>. "
+                draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font, align="left")
+                
+                # elements.append(lesson[1])  # Тип занятия
+
+
+                first_line_text = lesson[1] + ", " + lesson[2]
+                second_line_text = str(lesson[7]) + " - " + str(lesson[8])
+
+                draw.text((lesson_name_px, lesson_type_py), first_line_text, fill="black", font=lesson_text)
+                draw.text((lesson_name_px, lesson_time_py), second_line_text, fill="black", font=lesson_text)
+                if len(lesson[3]) < 4:
+                    draw.text((lesson_room_px, lesson_room_py), lesson[3], fill="black", font=datetime_font, align="left")
+                else:
+                    draw.text((lesson_room_px, lesson_room_py), "...", fill="black", font=datetime_font, align="left")
+                                
+                lesson_name_py += 194
+                lesson_time_py += 194
+                lesson_room_py += 194
+                lesson_type_py += 194
+                bio = BytesIO()
+                bio.name = 'schedule.png'
+                raw_image.save(bio, 'png')
+                bio.seek(0)
+                # bytes_image = bytes(raw_image.tobytes())
+
+                # if raw_image.tobytes() == bytes_image:
+                #     print("ALL GOOD")
+                # else:
+                #     print("bad.....")
+        return bio
 
     async def notify(self, bot) -> None:
+        print("Отрабатывает функция NOTIFY")
         groups_ids = self.get_groups()
         new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
         self.update_db(new_notify, deleted_notify, dont_notify)
