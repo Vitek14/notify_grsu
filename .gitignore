@@ -11,5 +11,3 @@ __pycache__/
 grsu-env
 .vscode
 build
-!/.idea/misc.xml
-!/.idea/notify_grsu.iml
