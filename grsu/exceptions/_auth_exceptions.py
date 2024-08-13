@@ -4,6 +4,7 @@ class InvalidCredentialsError(Exception):
         self.message = message
         super().__init__(self.message)
 
-class ConnectionError(Exception):
+
+class WebsiteConnectionError(Exception):
     """Указывает на ошибку сайта ГрГУ. Возможно он не отвечает."""
     pass

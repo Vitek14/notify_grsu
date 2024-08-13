@@ -1,42 +1,37 @@
 # -*- coding: utf-8 -*-
-import grequests
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, callback_query, reply_keyboard_markup
 import asyncio
+import locale
 # Для нормальной обработки контента
-import json
 # Для чистки текста от html тегов
 import re
+from datetime import datetime
 # Импорт даты, чтобы показывать расписание более приятным способом
-from datetime import datetime, timedelta
-
-import aiogram
-from aiogram import Bot, Dispatcher, Router, F, types
-from aiogram.filters.command import Command
-from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
-from aiogram.fsm.context import FSMContext
-
-from aiogram.types import BufferedInputFile
+from datetime import timedelta
 
 # Импорт функций
 from functions.auth import auth
-from functions.notifications import timer
-from functions.select_info import select_auth_info, select_group_info, get_web_user_info, get_attestation
-from settings import API_KEY
-from aiogram.fsm.state import State, StatesGroup
-
+from functions.select_info import select_auth_info, get_attestation
+from grsu.exceptions import *
+from grsu.schedule import Schedule
 from grsu.student import Student
 from grsu.student.marks import Marks
 from grsu.student.settings import Settings
-from grsu.schedule import Schedule
-from grsu.exceptions import *
 
+import aiogram
+from aiogram import Bot, Dispatcher, Router, F
+from aiogram.filters.command import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import BufferedInputFile
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from settings import API_KEY
 from settings import settings_dict, settings_buttons
 
-from datetime import datetime
-import locale
-
 # Устанавливаем русскую локализацию
+# TODO: Для линукса и для винды это разное значение должно быть
 locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
 
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
@@ -52,8 +47,10 @@ form_router = Router()
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 
+
 class StateMarks(StatesGroup):
     subject = State()
+
 
 class StateSettings(StatesGroup):
     previous_message = State()
@@ -62,16 +59,20 @@ class StateSettings(StatesGroup):
     category = State()
     settings = State()
 
+
 class StateSchedule(StatesGroup):
     day = State()
 
+
 def clear_state(func):
     async def wrapper(message, state: FSMContext):
-        clear = await message.answer(text="Удаляем лишние кнопки, если имеются...", protect_content=True, reply_markup=ReplyKeyboardRemove())
+        clear = await message.answer(text="Удаляем лишние кнопки, если имеются...", protect_content=True,
+                                     reply_markup=ReplyKeyboardRemove())
         await clear.delete()
         await state.clear()
         original_func = await func(message, state)
         return original_func
+
     return wrapper
 
 
@@ -103,7 +104,7 @@ async def login_command(message, state):
         await message.answer(text="Неправильно введены данные!")
         return
     login = text[1]
-    password = text[2]
+    password= text[2]
 
     user_id = message.from_user.id
     await message.delete()
@@ -168,13 +169,17 @@ async def settings_command(message, state):
     if len(user_settings) == 0:
         st_settings.create_settings(user_id)
         user_settings = st_settings.get_settings(user_id)
-    
-    keyboard_list = [[KeyboardButton(text="Инфо")], [KeyboardButton(text="Уведомления")], [KeyboardButton(text="Логин")], [KeyboardButton(text="Расписание")], [KeyboardButton(text="Убрать это...")]]
+
+    keyboard_list = [[KeyboardButton(text="Инфо")], [KeyboardButton(text="Уведомления")],
+                     [KeyboardButton(text="Логин")], [KeyboardButton(text="Расписание")],
+                     [KeyboardButton(text="Убрать это...")]]
 
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
 
-    await message.answer(f"""Это меню настроек. Ниже выберите категорию настроек и настройте что вы хотите.""", reply_markup=buttons)
+    await message.answer(f"""Это меню настроек. Ниже выберите категорию настроек и настройте что вы хотите.""",
+                         reply_markup=buttons)
     await state.set_state(StateSettings.category)
+
 
 @dp.message(StateSettings.category)
 async def settings_reply(message, state: FSMContext) -> None:
@@ -193,7 +198,8 @@ async def settings_reply(message, state: FSMContext) -> None:
     user_settings = st_settings.get_settings(user_id)
     text = ""
 
-    # Перебор значений в словаре, который содержит начальный текст и названий настроек из базы данных(их сопостовление с простым русским языком)
+    # Перебор значений в словаре, который содержит начальный текст и названий настроек из базы данных(их
+    # сопоставление с простым русским языком)
     for item, value in settings_dict[message.text].items():
         if item == "text":
             text = str(text) + str(value)
@@ -231,7 +237,7 @@ async def info_settings_reply(message, state: FSMContext) -> None:
     keyboard_list = settings_buttons[previous_data["text"]]
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
     user_settings = st_settings.get_settings(user_id)
-    
+
     text = ""
     for item, value in settings_dict[previous_data["text"]].items():
         if item == "text":
@@ -248,7 +254,6 @@ async def info_settings_reply(message, state: FSMContext) -> None:
 @dp.message(Command("info"))
 @clear_state
 async def start_command(message, state):
-    
     bot_message = await message.answer(text="Производим запросы...", protect_content=True)
 
     user_id = message.from_user.id
@@ -270,7 +275,6 @@ async def start_command(message, state):
         # student.refresh_token(new_token, user_id)
         # about_info = student.get_about(new_token)
 
-
         about_info["userInfo"]
     except Exception as error:
         await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
@@ -278,7 +282,6 @@ async def start_command(message, state):
         new_token = student.auth(login_info["username"], login_info["password"])
         student.refresh_token(new_token, user_id)
         about_info = student.get_about(new_token)
-
 
     useful_info = about_info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
@@ -297,12 +300,13 @@ async def start_command(message, state):
     await bot_message.edit_text(f"""
 ФИО: {useful_info["FIO_R"]}
 Курс: {useful_info["N_D"]}{faculty}{specialization}{email}{group}""",
-reply_markup=markup, protect_content=True)
+                                reply_markup=markup, protect_content=True)
 
 
 @dp.callback_query(F.data == "Оценки")
 async def user_marks(callback_query, state: FSMContext):
-    await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...", reply_markup=ReplyKeyboardRemove())
+    await callback_query.answer(text="Производим запросы, это занимает обычно 5 секунд...",
+                                reply_markup=ReplyKeyboardRemove())
 
     user_id = callback_query.from_user.id
     user_auth_info = student.get_token(user_id)
@@ -336,8 +340,10 @@ async def user_marks(callback_query, state: FSMContext):
 
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
 
-    await callback_query.message.answer("Выберите желаемый предмет", reply_markup=buttons)  # Узнать проблему с жирным шрифтом
+    await callback_query.message.answer("Выберите желаемый предмет",
+                                        reply_markup=buttons)  # Узнать проблему с жирным шрифтом
     await state.set_state(StateMarks.subject)
+
 
 @dp.message(StateMarks.subject)
 async def process_name(message, state: FSMContext) -> None:
@@ -359,7 +365,8 @@ async def process_name(message, state: FSMContext) -> None:
             subject_list.append(mark)
 
     if len(subject_list) == 0:
-        await message.answer(text="Мы не нашли оценок для этого предмета, попробуйте другой или уберите эти кнопки снизу нажав на соответствующую кнопку")
+        await message.answer(
+            text="Мы не нашли оценок для этого предмета, попробуйте другой или уберите эти кнопки снизу нажав на соответствующую кнопку")
         return
 
     await message.answer(text=text, parse_mode="HTML")
@@ -377,8 +384,8 @@ async def schedule_button(callback_query, state: FSMContext):
     group_info = student.get_groups(user_id)
 
     study_group = group_info["group_0"]
-    lab_groups= [group_info["group_1"], group_info["group_2"], group_info["group_3"],
-    group_info["group_4"], group_info["group_5"]]
+    lab_groups = [group_info["group_1"], group_info["group_2"], group_info["group_3"],
+                  group_info["group_4"], group_info["group_5"]]
 
     if not schedule.if_exists(study_group):
         schedule.create_schedule(study_group)
@@ -396,9 +403,9 @@ async def schedule_button(callback_query, state: FSMContext):
     text_lessons = ""
     # Отображение как "среда, 14 фев."
     day_text = current_day.strftime("%A, %d %b:\n")
-        
 
-    buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")], [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
+    buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")],
+               [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
     keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
     # Если нет уроков, то студент свободен
@@ -419,6 +426,7 @@ async def schedule_button(callback_query, state: FSMContext):
     await state.set_state(StateSchedule.day)
     await state.update_data(day=current_day)
 
+
 @dp.message(StateSchedule.day)
 async def schedule_selected(message, state: FSMContext) -> None:
     if message.text == "Убрать это...":
@@ -437,6 +445,7 @@ async def schedule_selected(message, state: FSMContext) -> None:
         previous_day = await state.get_data()
         await state.update_data(day=datetime.today())
         await schedule_button(message, state)
+
 
 async def start():
     print("Бот готов к работе")

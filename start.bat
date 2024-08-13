@@ -1,2 +1,2 @@
-python temp.py
+python main.py
 pause

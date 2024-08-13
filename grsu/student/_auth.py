@@ -1,10 +1,14 @@
 import grequests
 import json
-from ..exceptions import InvalidCredentialsError, ConnectionError
+from ..exceptions import InvalidCredentialsError, WebsiteConnectionError
+
 
 def auth(self, login: str, password: str) -> dict:
-    """Фукнция авторизует пользователя с помощью его логина и пароля. Функция возвращает либо текст с ошибкой для пользователя,
-     либо словарь с данными аутентификации"""
+    """Функция авторизует пользователя с помощью его логина и пароля.
+    :login: Логин пользователя на edu.grsu.by
+    :password: Пароль пользователя на edu.grsu.by
+    :return: Текст с ошибкой для пользователя, либо словарь с данными аутентификации
+    """
 
     # Для автоматического закрытия сессии
     with grequests.Session() as session:
@@ -12,12 +16,12 @@ def auth(self, login: str, password: str) -> dict:
         # Получаем токен
         before_auth_page = session.get('https://edu.grsu.by/login')
         before_html = before_auth_page.text
-        AuthState = before_html.split('name="AuthState" value="')[1].split('"')[0]
+        authstate = before_html.split('name="AuthState" value="')[1].split('"')[0]
 
         data = {
             "username": login,
             "password": password,
-            "AuthState": AuthState
+            "AuthState": authstate
         }
 
         response = session.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data)
@@ -25,21 +29,15 @@ def auth(self, login: str, password: str) -> dict:
 
         # Пытаемся найти значение токена пользователя, иначе возвращаем ошибку!
         try:
-            SAMLResponse = response.text.split('name="SAMLResponse" value="')[1].split('"')[0]
+            samlresponse = response.text.split('name="SAMLResponse" value="')[1].split('"')[0]
         except IndexError:
             raise InvalidCredentialsError
 
         # Логинимся, используя токен
         session.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
-            "SAMLResponse": SAMLResponse,
+            "SAMLResponse": samlresponse,
             "RelayState": "https://edu.grsu.by/login/index.php"
         })
-
-        # test = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-        #     "method": "getCoursesData"
-        # })
-
-        # print(json.loads(test.text))
 
         cookies = session.cookies.get_dict()
         login_dict = {
