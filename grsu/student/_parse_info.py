@@ -12,6 +12,7 @@ Base = declarative_base()
 engine = create_engine('sqlite:///user.db')
 Base.metadata.create_all(engine)
 
+
 def get_about(self, token_info: dict) -> dict:
     """
     Получение базовых данных о студенте, включая его имя, курс и т.д

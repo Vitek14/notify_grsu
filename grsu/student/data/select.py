@@ -13,6 +13,7 @@ Base.metadata.create_all(engine)
 # Объявляем объект сессии
 Session = sessionmaker(engine)
 
+
 def get_login(self, tg_id: int) -> dict:
     """Получает данные о логине, пароле"""
 
@@ -23,15 +24,17 @@ def get_login(self, tg_id: int) -> dict:
 
     return result
 
+
 def get_token(self, tg_id: int) -> dict:
     """Получает данные о текущем сохранённом токене"""
 
     # Было бы неплохо поменять как-то
     Student = self.__class__
     with Session() as session:
-        token_info = session.execute(select(Student.MDL_SSP_AuthToken, Student.MDL_SSP_SessID, Student.MOODLEID1_, Student.MoodleSession).where(Student.tg_id == tg_id)).first()._asdict() # type: ignore
+        token_info = session.execute(select(Student.MDL_SSP_AuthToken, Student.MDL_SSP_SessID, Student.MOODLEID1_, Student.MoodleSession).where(Student.tg_id == tg_id)).first()._asdict()  # type: ignore
 
     return token_info
+
 
 def get_groups(self, tg_id: int) -> dict:
     """Получает данные о группах студента"""
@@ -43,12 +46,14 @@ def get_groups(self, tg_id: int) -> dict:
 
     return groups_info
 
+
 def get_groups_all(self):
     Student = self.__class__
     with Session() as session:
         groups_info = session.execute(select(Student.group_0, Student.group_1, Student.group_2, Student.group_3, Student.group_4, Student.group_5, Student.tg_id)).all() # type: ignore
 
     return groups_info
+
 
 def get_marks(self, user_id: int) -> Sequence:
 

@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Integer, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 from sqlalchemy import create_engine
 from sqlalchemy import update
 
@@ -13,36 +13,38 @@ Session = sessionmaker(engine)
 class Settings(Base):
     """Класс настроек студента"""
     __tablename__ = "user_preferences"
-    rowid = Column("rowid", Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer)
-    show_today_at_end = Column(Integer, nullable=False, default=1)
-    auto_login = Column(Integer, nullable=False, default=1)
-    auto_time = Column(Integer, nullable=False, default=1)
-    show_faculty = Column(Integer, nullable=False, default=1)
-    show_specialization = Column(Integer, nullable=False, default=1)
-    show_email = Column(Integer, nullable=False, default=1)
-    show_group = Column(Integer, nullable=False, default=1)
-    send_marks_notification = Column(Integer, nullable=False, default=1)
-    send_schedule_notification = Column(Integer, nullable=False, default=1)
-    send_homework_notification = Column(Integer, nullable=False, default=1)
-    send_update_notification = Column(Integer, nullable=False, default=1)
-    show_USR = Column(Integer, nullable=False, default=1)
-    show_adress = Column(Integer, nullable=False, default=1)
-    show_room = Column(Integer, nullable=False, default=1)
-    show_teacher = Column(Integer, nullable=False, default=1)
-    show_full_data = Column(Integer, nullable=False, default=1)
-    show_start_time = Column(Integer, nullable=False, default=1)
-    show_end_time = Column(Integer, nullable=False, default=1)
-    show_facultative = Column(Integer, nullable=False, default=1)
-    show_lesson_type = Column(Integer, nullable=False, default=1)
+    rowid: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int]
+    show_today_at_end: Mapped[int] = mapped_column(nullable=False, default=1)
+    auto_login: Mapped[int] = mapped_column(nullable=False, default=1)
+    auto_time: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_faculty: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_specialization: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_email: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_group: Mapped[int] = mapped_column(nullable=False, default=1)
+    send_marks_notification: Mapped[int] = mapped_column(nullable=False, default=1)
+    send_schedule_notification: Mapped[int] = mapped_column(nullable=False, default=1)
+    send_homework_notification: Mapped[int] = mapped_column(nullable=False, default=1)
+    send_update_notification: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_USR: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_address: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_room: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_teacher: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_full_data: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_start_time: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_end_time: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_facultative: Mapped[int] = mapped_column(nullable=False, default=1)
+    show_lesson_type: Mapped[int] = mapped_column(nullable=False, default=1)
 
-    def create_settings(self, user_id: int) -> None:
+    @staticmethod
+    def create_settings(user_id: int) -> None:
         with Session() as session:
             settings = Settings(rowid=None, user_id=user_id)
             session.add(settings)
             session.commit()
 
-    def get_settings(self, user_id: int) -> dict:
+    @staticmethod
+    def get_settings(user_id: int) -> dict:
         """Получит все настройки пользователя"""
         with Session() as session:
             settings = session.query(Settings).filter_by(user_id=user_id).first()
@@ -51,11 +53,11 @@ class Settings(Base):
             else:
                 return settings.__dict__
 
-    def update_setting(self, user_id: int, setting_name: str, value: int) -> None:
+    @staticmethod
+    def update_setting(user_id: int, setting_name: str, value: int) -> None:
         """Обновит настройку пользователя"""
         with Session() as session:
             update_values = {setting_name: value}
             session.execute(update(Settings).where(Settings.user_id == user_id).values(**update_values))
             # update(Settings).where(auto_time==user_id).values(setting_name=value)
             session.commit()
-

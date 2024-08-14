@@ -57,7 +57,7 @@ class Student(Base):
             else:
                 return False
 
-    @staticmethod  # Для более наглядного показа, что этот метод не зависит от класса по своей сути(экспериментально)
+    @staticmethod
     def create_new_student(user_id: int, auth_info: dict, login: str, password: str) -> None:
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)

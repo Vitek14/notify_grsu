@@ -30,9 +30,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from settings import API_KEY
 from settings import settings_dict, settings_buttons
 
+import platform
+
 # Устанавливаем русскую локализацию
-# TODO: Для линукса и для винды это разное значение должно быть
-locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+if platform.system() == "Windows":
+    locale.setlocale(locale.LC_TIME, 'ru_RU')
+else:
+    locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
 
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
@@ -104,7 +108,7 @@ async def login_command(message, state):
         await message.answer(text="Неправильно введены данные!")
         return
     login = text[1]
-    password= text[2]
+    password = text[2]
 
     user_id = message.from_user.id
     await message.delete()
@@ -163,7 +167,6 @@ async def attestation(message):
 
 @dp.message(Command("settings"))
 async def settings_command(message, state):
-    # bot_message = await message.answer("Получаем ваши настройки...")
     user_id = message.from_user.id
     user_settings = st_settings.get_settings(user_id)
     if len(user_settings) == 0:
@@ -189,8 +192,8 @@ async def settings_reply(message, state: FSMContext) -> None:
         return
     # print(message.text)
     try:
-        keyboard_list = settings_buttons[message.text]
-    except:
+        keyboard_list = settings_buttons[message.text]  # Ищем настройку по названию
+    except KeyError:
         await message.answer("Неверная настройка")
         return
     buttons = ReplyKeyboardMarkup(keyboard=keyboard_list, resize_keyboard=True)
@@ -226,7 +229,7 @@ async def info_settings_reply(message, state: FSMContext) -> None:
 
     try:
         setting_name = str(settings_dict[previous_data["text"]][message.text])
-    except:
+    except KeyError:
         await message.answer(text="Неверная настройка")
         return
 
@@ -248,7 +251,6 @@ async def info_settings_reply(message, state: FSMContext) -> None:
     await previous_data["previous_message"].delete()
     await message.delete()
     await state.update_data(previous_message=bot_message)
-    # marks = st_marks.get_marks(user_id)
 
 
 @dp.message(Command("info"))
@@ -278,10 +280,13 @@ async def start_command(message, state):
         about_info["userInfo"]
     except Exception as error:
         await bot_message.edit_text("Видимо токен устарел, пробуем обновить...")
+
+        # TODO: Нужно поменять функцию get_login и auth
         login_info = student.get_login(user_id)
         new_token = student.auth(login_info["username"], login_info["password"])
+
         student.refresh_token(new_token, user_id)
-        about_info = student.get_about(new_token)
+        about_info = student.get_about(new_token)  # TODO: Поменять функцию get_about, чтобы не было self
 
     useful_info = about_info["userInfo"]
     markup = aiogram.types.InlineKeyboardMarkup(inline_keyboard=[])
@@ -292,6 +297,8 @@ async def start_command(message, state):
     markup.inline_keyboard.append([btn1, btn2])
 
     user_settings = st_settings.get_settings(user_id)
+
+    # В зависимости от настроек из базы данных либо добавлять, либо НЕ добавлять в сообщение
     faculty = ("\nФакультет: " + useful_info["N_OTDEL"]) if user_settings["show_faculty"] == 1 else ""
     specialization = ("\nСпециальность: " + useful_info["NNAUCH"]) if user_settings["show_specialization"] == 1 else ""
     email = ("\nEMAIL: " + useful_info["EMAIL"]) if user_settings["show_email"] == 1 else ""
