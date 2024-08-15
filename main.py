@@ -12,10 +12,10 @@ from datetime import timedelta
 from functions.auth import auth
 from functions.select_info import select_auth_info, get_attestation
 from grsu.exceptions import *
-from grsu.schedule import Schedule
-from grsu.student import Student
-from grsu.student.marks import Marks
-from grsu.student.settings import Settings
+from grsu.schedule import Schedule          # Отвечает за расписание
+from grsu.student import Student            # Отвечает за все методы, связанные со студентом
+from grsu.student.marks import Marks        # Отвечает за оценки студента
+from grsu.student.settings import Settings  # Отвечает за настройки пользователя
 
 import aiogram
 from aiogram import Bot, Dispatcher, Router, F

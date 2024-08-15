@@ -6,6 +6,7 @@ from sqlalchemy import update
 
 Base = declarative_base()
 
+
 class Marks(Base):
     """Класс оценок студента"""
     __tablename__ = "grades"
