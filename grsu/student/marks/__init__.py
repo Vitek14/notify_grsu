@@ -1,14 +1,16 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy import update
+from ..data.select import Mixin
+
 
 Base = declarative_base()
 
 
-class Marks(Base):
-    """Класс оценок студента"""
+class Marks(Base, Mixin):
+    """
+    Класс оценок студента
+    """
+
     __tablename__ = "grades"
     rowid = Column("rowid", Integer, primary_key=True, autoincrement=True)
     subject = Column(String)
@@ -17,7 +19,7 @@ class Marks(Base):
     user_id = Column(Integer)
     
     from ._marks import get_marks_from_site, get_courses_data, get_courses_names
-    from ..data.select import get_marks
+    # from ..data.select import get_marks
     from ..data.insert import insert_new_marks
     from ..data.delete import delete_marks
     

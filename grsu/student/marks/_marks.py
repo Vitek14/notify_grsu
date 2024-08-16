@@ -5,11 +5,6 @@ from sqlalchemy import select, delete, insert
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from ..data.select import get_marks
-from ..data.delete import delete_marks
-from ..data.insert import insert_new_marks
-from settings import proxy_list_http, proxy_list_https
-from random import choice
 
 Base = declarative_base()
 

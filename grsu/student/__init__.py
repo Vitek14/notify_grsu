@@ -3,11 +3,12 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 from sqlalchemy import create_engine
 from sqlalchemy import update
+from .data.select import Mixin
 
 Base = declarative_base()
 
 
-class Student(Base):
+class Student(Base, Mixin):
     """Класс студента определяет такие функции, как: auth(), get_user_info"""
     __tablename__ = "user_data"
 
@@ -29,7 +30,8 @@ class Student(Base):
     tg_id: Mapped[int]
 
     from ._auth import auth, about
-    from .data.select import get_login, get_groups, get_token, get_groups_all
+    # from .data.select import get_login, get_groups, get_token, get_groups_all
+    # from .data.select import get_groups, get_groups_all
     from ._parse_info import get_about, get_attestation
 
     @staticmethod
