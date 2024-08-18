@@ -16,9 +16,12 @@ from grsu import student
 from grsu.student import Student
 from grsu.student.settings import Settings
 
+from ..exceptions import ScheduleNotFound
+
 Base = declarative_base()
 student = Student()
 settings = Settings()
+
 
 class Schedule(Base):
     """Класс расписания определяет общее расписание студентов, а также их домашние задания"""
@@ -38,9 +41,10 @@ class Schedule(Base):
     homework = Column(String)
     homework_added_by_id = Column(Integer)
 
-    def if_exists(self, group_id: int) -> bool:
+    @staticmethod
+    def if_exists(group_id: int) -> bool:
         """
-        Функция проверит существует ли расписание для группы
+        Функция проверяет существование расписания для группы.
         :group_id: Id группы
         """
         engine = create_engine('sqlite:///user.db')
@@ -56,7 +60,26 @@ class Schedule(Base):
 
     from ._web import get_raw_schedule, process_schedule
 
-    def get_schedule_from_db(self) -> list:
+    @staticmethod
+    def get_schedule_from_db() -> list:
+        """
+        Функция выдаёт всё расписание по группе.
+        :group_id: ID группы, для которого искать расписание
+        """
+        engine = create_engine('sqlite:///user.db')
+        Base.metadata.create_all(engine)
+        # Объявляем объект сессии
+        Session = sessionmaker(engine)
+        with Session() as session:
+            # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
+            schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+                                              Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                              Schedule.day, Schedule.start_time,
+                                              Schedule.end_time, Schedule.group_id, Schedule.subgroup_id)).all()
+        return schedule
+
+    @staticmethod
+    def get_student_schedule_from_db(group_id):
         """
         Функция выдаёт всё расписание по группе
         :group_id: ID группы, для которого искать расписание
@@ -68,40 +91,33 @@ class Schedule(Base):
         with Session() as session:
             # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
             schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
-            Schedule.place, Schedule.room, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time  ,
-            Schedule.end_time, Schedule.group_id, Schedule.subgroup_id)).all()
+                                              Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                              Schedule.day, Schedule.start_time,
+                                              Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).where(
+                group_id == group_id)).all()
         return schedule
 
-    def get_student_schedule_from_db(self, group_id):
+    @staticmethod
+    def create_schedule(groups_ids: list) -> None:
         """
-        Функция выдаёт всё расписание по группе
-        :group_id: ID группы, для которого искать расписание
+        Создаст расписание для указанных групп.
+        :param groups_ids: Лист групп студента, включая основную и лабораторные.
         """
-        engine = create_engine('sqlite:///user.db')
-        Base.metadata.create_all(engine)
-        # Объявляем объект сессии
-        Session = sessionmaker(engine)
-        with Session() as session:
-            # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
-            schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
-            Schedule.place, Schedule.room, Schedule.teacher, Schedule.date, Schedule.day, Schedule.start_time  ,
-            Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).where(group_id==group_id)).all()
-        return schedule
-
-    def create_schedule(self, group_id: int) -> list:
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
         Session = sessionmaker(engine)
 
-        raw_schedule = Schedule().get_raw_schedule(group_id)
-        schedule = Schedule().process_schedule(raw_schedule, group_id)
+        raw_schedule = Schedule().get_raw_schedule(groups_ids)
+        schedule = Schedule().process_schedule(raw_schedule)
+        if not schedule:
+            raise ScheduleNotFound
         actual_data = [(None, *t) for i, t in enumerate(schedule)]
         with Session() as session:
             session.execute(insert(Schedule).values(actual_data))
             session.commit()
-        return schedule
 
-    def get_groups(self) -> list:
+    @staticmethod
+    def get_groups() -> list:
         """
         Вернёт лист, в котором будут находиться все ОСНОВНЫЕ группы(study_group)
         По которым следует искать расписания
@@ -116,7 +132,6 @@ class Schedule(Base):
         for group in schedule_groups:
             groups_id.append(group[0])
         return list(set(groups_id))  # Нужно, чтобы убрать дупликаты
-            
 
     def get_new_lessons(self, groups_ids: list):
         """
@@ -154,8 +169,7 @@ class Schedule(Base):
         return new_notify, deleted_notify, dont_notify
         # ДАЛЬШЕ ДЕЛАТЬ ФУНКЦИИ ВСТАВКИ, УДАЛЕНИЯ И ОПОВЕЩЕНИЯ ПОЛЬЗОВАТЕЛЯ
 
-
-        # Сначала нужен цикл, который 
+        # Сначала нужен цикл, который
 
     def update_db(self, new_notify, deleted_notify, dont_notify) -> None:
         engine = create_engine('sqlite:///user.db')
@@ -167,7 +181,7 @@ class Schedule(Base):
         with Session() as session:
             if len(new_notify) > 0:
                 actual_data = [(None, *t) for i, t in enumerate(new_notify)]
-                session.execute(insert(Schedule).values(actual_data)) # type: ignore
+                session.execute(insert(Schedule).values(actual_data))  # type: ignore
             # Объединяем 2 листа, которые нужно удалить
             if len(deleted_notify) > 0 or len(dont_notify) > 0:
                 deletable = deleted_notify + dont_notify
@@ -198,7 +212,7 @@ class Schedule(Base):
         im2 = Image.open("grsu/schedule/images/border.png")
 
         # Вставляем второе изображение в вырезанную область
-        im1.paste(im2, (left, bottom-126))
+        im1.paste(im2, (left, bottom - 126))
 
         # # Показываем итоговое изображение
         # im1.show()
@@ -229,17 +243,17 @@ class Schedule(Base):
                 # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
                 if lesson[9] == student[0] or lesson[10] in lab_groups:
                     if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
-                            continue
+                        continue
                     if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
                         continue
-                        
+
                         # Если студента нет в этой группе, то переходить к след занятию
                     if lesson[10] and not lesson[10] in lab_groups:
                         continue
 
                     if not is_notify and lesson[5] != student[7]:
                         continue
-                        
+
                     # Лист в котором хранится все данные об уроке, кроме его названия
                     elements = []
                     text_lessons = "<b>" + lesson[0] + "</b>. "
@@ -263,7 +277,6 @@ class Schedule(Base):
                         text_date = current_date.strftime(" (%A, %d %b.)")
                         elements.append(text_date)
 
-                    
                     # Перевести лист elements в строковый тип, разделяя данные с помощью ", "
                     normal_lessons = ", ".join(elements)
                     all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
@@ -293,17 +306,16 @@ class Schedule(Base):
         draw = ImageDraw.Draw(raw_image)
 
         # specified font size 
-        font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)  
-        
-        date = datetime.today().strftime("%d.%m.%Y")
-        
-        # drawing text size 
-        draw.text((715+103, 174), date, fill=(0,0,0,255), font = font, align ="left", anchor="ma")
+        font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)
 
-        datetime_font = ImageFont.truetype("grsu/schedule/images/OpenSans-Bold.ttf", 24)  
+        date = datetime.today().strftime("%d.%m.%Y")
+
+        # drawing text size 
+        draw.text((715 + 103, 174), date, fill=(0, 0, 0, 255), font=font, align="left", anchor="ma")
+
+        datetime_font = ImageFont.truetype("grsu/schedule/images/OpenSans-Bold.ttf", 24)
         lesson_name_font = ImageFont.truetype("grsu/schedule/images/OpenSans-Bold.ttf", 28)
         lesson_text = ImageFont.truetype("grsu/schedule/images/OpenSans-Regular.ttf", 24)
-
 
         lesson_name_px = 267
         lesson_name_py = 384
@@ -319,21 +331,21 @@ class Schedule(Base):
             # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
             if lesson[9] == student[0] or lesson[10] in lab_groups:
                 if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
-                        continue
+                    continue
                 if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
                     continue
-                    
+
                     # Если студента нет в этой группе, то переходить к след занятию
                 if lesson[10] and not lesson[10] in lab_groups:
                     continue
-                    
+
                 # Лист в котором хранится все данные об уроке, кроме его названия
                 # elements = []
                 # text_lessons = "<b>" + lesson[0] + "</b>. "
-                draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font, align="left")
-                
-                # elements.append(lesson[1])  # Тип занятия
+                draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font,
+                          align="left")
 
+                # elements.append(lesson[1])  # Тип занятия
 
                 first_line_text = lesson[1] + ", " + lesson[2]
                 second_line_text = str(lesson[7]) + " - " + str(lesson[8])
@@ -341,10 +353,11 @@ class Schedule(Base):
                 draw.text((lesson_name_px, lesson_type_py), first_line_text, fill="black", font=lesson_text)
                 draw.text((lesson_name_px, lesson_time_py), second_line_text, fill="black", font=lesson_text)
                 if len(lesson[3]) < 4:
-                    draw.text((lesson_room_px, lesson_room_py), lesson[3], fill="black", font=datetime_font, align="left")
+                    draw.text((lesson_room_px, lesson_room_py), lesson[3], fill="black", font=datetime_font,
+                              align="left")
                 else:
                     draw.text((lesson_room_px, lesson_room_py), "...", fill="black", font=datetime_font, align="left")
-                                
+
                 lesson_name_py += 194
                 lesson_time_py += 194
                 lesson_room_py += 194

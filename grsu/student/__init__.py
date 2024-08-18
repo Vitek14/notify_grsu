@@ -4,11 +4,13 @@ from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 from sqlalchemy import create_engine
 from sqlalchemy import update
 from .data.select import Mixin
+from ._parse_info import ParseMixin
+from ._auth import AboutMixin
 
 Base = declarative_base()
 
 
-class Student(Base, Mixin):
+class Student(Base, Mixin, ParseMixin, AboutMixin):
     """Класс студента определяет такие функции, как: auth(), get_user_info"""
     __tablename__ = "user_data"
 
@@ -29,10 +31,7 @@ class Student(Base, Mixin):
     group_5: Mapped[int]
     tg_id: Mapped[int]
 
-    from ._auth import auth, about
-    # from .data.select import get_login, get_groups, get_token, get_groups_all
-    # from .data.select import get_groups, get_groups_all
-    from ._parse_info import get_about, get_attestation
+    # from ._auth import auth, about
 
     @staticmethod
     def refresh_token(new_token: dict, tg_id: int) -> None:
@@ -43,7 +42,7 @@ class Student(Base, Mixin):
         Session = sessionmaker(engine)
         print("Обновление токена")
         with Session() as session:
-            session.execute(update(Student).where(Student.tg_id == tg_id).values(new_token))  # type: ignore
+            session.execute(update(Student).where(Student.tg_id == tg_id).values(new_token))
             session.commit() 
 
     @staticmethod

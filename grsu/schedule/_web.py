@@ -1,10 +1,8 @@
 import grequests
 import json
 from datetime import datetime, timedelta
+from ..exceptions import ScheduleNotFound
 
-from sqlalchemy.sql.ddl import SchemaDropper
-
-from grsu import schedule
 
 def get_raw_schedule(self, groups_id: list) -> list:
     current_date = datetime.today()
@@ -16,19 +14,28 @@ def get_raw_schedule(self, groups_id: list) -> list:
 
     requests = []
     for group_id in groups_id:
-        group_schedule = grequests.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={group_id}&dateStart={week_ago_formatted}&dateEnd={month_after_formatted}&lang=ru_RU")
+        # Если нет определённой лабораторной группы у студента(None)
+        if not group_id:
+            continue
+        group_schedule = grequests.get(f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={group_id}&dateStart="
+                                       f"{week_ago_formatted}&dateEnd={month_after_formatted}&lang=ru_RU")
+
         requests.append(group_schedule)
-    
+
     responses = grequests.map(requests, stream=True)
     responses_with_groups = list(zip(groups_id, responses))
     return responses_with_groups
 
-def process_schedule(self, raw_schedule: list) -> list:
-    #TEST
+
+def process_schedule(self, raw_schedule: list) -> list | None:
     group_schedule_list = []
     for group_schedule in raw_schedule:
         group_id = group_schedule[0]
         json_group_schedule = json.loads(group_schedule[1].text)
+
+        # Если в расписании нет по факту расписания
+        if json_group_schedule["count"] == 0:
+            continue
         for day in json_group_schedule["days"]:
             date = day["date"]
             day_num = int(day["num"])
