@@ -1,4 +1,3 @@
-from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 from sqlalchemy import create_engine
@@ -30,8 +29,6 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
     group_4: Mapped[int]
     group_5: Mapped[int]
     tg_id: Mapped[int]
-
-    # from ._auth import auth, about
 
     @staticmethod
     def refresh_token(new_token: dict, tg_id: int) -> None:

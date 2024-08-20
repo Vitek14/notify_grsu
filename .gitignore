@@ -10,3 +10,4 @@ __pycache__/
 grsu-env
 .vscode
 build
+/.idea/workspace.xml

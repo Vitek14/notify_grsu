@@ -1,7 +1,8 @@
+from loguru import logger
 from requests import delete
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 from sqlalchemy import create_engine
 from sqlalchemy import update, insert, select
 from io import BytesIO
@@ -26,20 +27,20 @@ settings = Settings()
 class Schedule(Base):
     """Класс расписания определяет общее расписание студентов, а также их домашние задания"""
     __tablename__ = "schedule"
-    rowid = Column("rowid", Integer, primary_key=True, autoincrement=True)
-    name = Column(String)
-    lesson_type = Column(String)
-    place = Column(String)
-    room = Column(String)
-    teacher = Column(String)
-    date = Column(String)
-    day = Column(Integer)
-    start_time = Column(String)
-    end_time = Column(String)
-    group_id = Column(Integer)
-    subgroup_id = Column(Integer)
-    homework = Column(String)
-    homework_added_by_id = Column(Integer)
+    rowid: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str]
+    lesson_type: Mapped[str]
+    place: Mapped[str]
+    room: Mapped[str]
+    teacher: Mapped[str]
+    date: Mapped[str]
+    day: Mapped[int]
+    start_time: Mapped[str]
+    end_time: Mapped[str]
+    group_id: Mapped[int]
+    subgroup_id: Mapped[int]
+    homework: Mapped[str]
+    homework_added_by_id: Mapped[int]
 
     @staticmethod
     def if_exists(group_id: int) -> bool:
@@ -79,22 +80,33 @@ class Schedule(Base):
         return schedule
 
     @staticmethod
-    def get_student_schedule_from_db(group_id):
+    def get_student_schedule_from_db(group_id: int, date: str | None = None) -> list:
         """
-        Функция выдаёт всё расписание по группе
-        :group_id: ID группы, для которого искать расписание
+        Функция выдаёт всё расписание по группе.
+        :param group_id: ID группы, для которой искать расписание.
+        :param date: Дата, за которую искать расписание(None, если искать за всё время)
+        :return: Лист из кортежей со всеми занятиями за дату/все занятия
         """
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
         # Объявляем объект сессии
         Session = sessionmaker(engine)
         with Session() as session:
-            # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
-            schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
-                                              Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
-                                              Schedule.day, Schedule.start_time,
-                                              Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).where(
-                group_id == group_id)).all()
+            if not date:
+                logger.trace("Дата не указана, возвращаем всё расписание")
+                schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+                                                  Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                                  Schedule.day, Schedule.start_time,
+                                                  Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).
+                                           where(Schedule.group_id == group_id)).all()
+            else:
+                logger.trace(f"Поиск по дате: {date}")
+                schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+                                                  Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                                  Schedule.day, Schedule.start_time,
+                                                  Schedule.end_time, Schedule.group_id, Schedule.subgroup_id).
+                                           where(Schedule.group_id == group_id, Schedule.date == date)).all()
+            logger.debug(f"Расписание: {schedule}")
         return schedule
 
     @staticmethod
@@ -218,11 +230,12 @@ class Schedule(Base):
         # im1.show()
         return im1
 
-    def get_schedule_text(self, lessons: list, student_groups: list, is_notify: bool) -> list:
+    @staticmethod
+    def get_schedule_text(lessons: list, student_groups: list, is_notify: bool) -> list:
         """
-        Вернёт лист с текстом расписания и id студента, которому должно быть отправлено этот текст
+        Вернёт лист с текстом расписания и id студента, которому должно быть отправлено этот текст.
         :lessons: Расписание из базы данных или API
-        :student_groups: Все студенты
+        :student_groups: Все студенты.
         :is_notify: Если этот должно быть отправлено как оповещение
         """
         student_notification = []
@@ -231,27 +244,31 @@ class Schedule(Base):
         lessons = sorted(lessons, key=lambda x: x[7])
 
         # Для каждого студента перебираем
-        for student in student_groups:
-            user_settings = settings.get_settings(student[6])
-            lab_groups = student[1:5]
+        for _student in student_groups:
+            logger.debug(f"_student is: {_student}")
+            user_settings = settings.get_settings(_student[6])
+            lab_groups = _student[1:5]
             print("LAB GROUPS: " + str(lab_groups))
             all_lessons = ""
 
             # Для каждого урока
             real_lessons = 0
             for lesson in lessons:
+                logger.debug(f"Lesson: {lesson}")
+
+                if not is_notify and lesson[5] != _student[7]:
+                    logger.trace(f"Пропущено занятие: {lesson}. is_notify={is_notify}, date={_student[7]}")
+                    continue
+
                 # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
-                if lesson[9] == student[0] or lesson[10] in lab_groups:
+                if lesson[9] == _student[0] or lesson[10] in lab_groups:
                     if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
                         continue
                     if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
                         continue
 
-                        # Если студента нет в этой группе, то переходить к след занятию
+                    # Если студента нет в этой группе, то переходить к след занятию
                     if lesson[10] and not lesson[10] in lab_groups:
-                        continue
-
-                    if not is_notify and lesson[5] != student[7]:
                         continue
 
                     # Лист в котором хранится все данные об уроке, кроме его названия
@@ -281,17 +298,17 @@ class Schedule(Base):
                     normal_lessons = ", ".join(elements)
                     all_lessons = all_lessons + text_lessons + normal_lessons + "\n"
 
-                    real_lessons += 1  # Увеличиваем кол-во занятий для картинки. Нельзя использовать len(lessons), т.к возможно пользователь выбрал не показывать УСР
+                    real_lessons += 1  # Увеличиваем кол-во занятий для картинки. Нельзя использовать len(lessons),
+                    # т.к возможно пользователь выбрал не показывать УСР
 
             student_notification.append(
                 {
                     "text": all_lessons,
-                    "id": student[6],
+                    "id": _student[6],
                     "real_lessons": real_lessons
                 }
             )
 
-            # Почему-то при проверке 2 фотки показывает, вместо одной
             return student_notification
 
     def get_schedule_photo(self, student: tuple, lessons: list, real_lessons: int):
@@ -308,6 +325,7 @@ class Schedule(Base):
         # specified font size 
         font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)
 
+        # TODO: Изменить, чтобы не рисовало не только сегодняшний день
         date = datetime.today().strftime("%d.%m.%Y")
 
         # drawing text size 
@@ -328,6 +346,7 @@ class Schedule(Base):
         lesson_room_py = 420
         lab_groups = student[1:5]
         for lesson in lessons:
+            logger.debug(f"Занятие: {lesson}")
             # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
             if lesson[9] == student[0] or lesson[10] in lab_groups:
                 if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:

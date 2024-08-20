@@ -407,7 +407,8 @@ async def schedule_button(callback_query, state: FSMContext):
                   group_info["group_4"], group_info["group_5"]]
 
     all_groups = [study_group, *lab_groups]
-    print(all_groups)
+
+    # Если не существует расписания в базе данных для группы
     if not schedule.if_exists(study_group):
         logger.debug(f"Расписания для группы {study_group} не существует, создание...")
         try:
@@ -420,15 +421,37 @@ async def schedule_button(callback_query, state: FSMContext):
             return
 
     logger.info("Получение расписания из базы данных...")
-    schedule_db = schedule.get_student_schedule_from_db(study_group)
-    # user_settings = st_settings.get_settings(user_id)
     today = current_day.strftime("%Y-%m-%d")
+    schedule_db = schedule.get_student_schedule_from_db(study_group, today)
+
+    buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")],
+               [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
+    keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
     student_tuple = (study_group, *lab_groups, user_id, today)
     student_groups = [student_tuple]
+
+    # Если не было найдено расписания на текущий день
+    if len(schedule_db) == 0:
+        logger.debug("Не найдено расписание на день {day} для групп {groups}.", day=today, groups=student_groups)
+        if str(type(callback_query)) == "<class 'aiogram.types.callback_query.CallbackQuery'>":
+            await callback_query.message.answer(text=f"Для {today} не найдено расписания!",
+                                                reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await bot.send_message(chat_id=user_id, text=f"Для {today} не найдено расписания!", reply_markup=keyboard,
+                                   parse_mode="HTML")
+        await state.set_state(StateSchedule.day)
+        await state.update_data(day=current_day)
+        return
+
+    # user_settings = st_settings.get_settings(user_id)
     logger.info("Создание текста для расписания")
+    logger.debug(f"Расписание из базы данных для {student_groups}: {schedule_db}")
     all_raw_lessons = schedule.get_schedule_text(schedule_db, student_groups, False)
     all_lessons = all_raw_lessons[0]["text"]
-    print(all_raw_lessons)
+
+    logger.debug(f"Занятия(без обработки): {all_raw_lessons}")
+
     logger.info("Создание фото расписания")
     schedule_photo = schedule.get_schedule_photo(student_tuple, schedule_db, all_raw_lessons[0]["real_lessons"])
 
@@ -436,17 +459,13 @@ async def schedule_button(callback_query, state: FSMContext):
     # Отображение как "среда, 14 фев."
     day_text = current_day.strftime("%A, %d %b:\n")
 
-    buttons = [[KeyboardButton(text="Предыдущий день")], [KeyboardButton(text="Сегодня")],
-               [KeyboardButton(text="Следующий день")], [KeyboardButton(text="Убрать это...")]]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
     # Если нет уроков, то студент свободен
     if len(all_lessons) == 0:
         all_lessons = "Спать: 00:00-23:59"
 
     # Загружаем изображение на сервера телеграмм
     telegram_photo = BufferedInputFile(schedule_photo.read(), filename="schedule.png")
-    # print(schedule_photo)
+
     # В зависимости от того, как вызвана функция, выполнять разные действия
     if str(type(callback_query)) == "<class 'aiogram.types.callback_query.CallbackQuery'>":
         await callback_query.message.answer(text=day_text + all_lessons, reply_markup=keyboard, parse_mode="HTML")
