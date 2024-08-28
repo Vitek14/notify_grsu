@@ -395,9 +395,11 @@ async def schedule_button(callback_query, state: FSMContext):
     data = await state.get_data()
     logger.debug("Получены данные из FSM: {data}", data=data)
     try:
-        current_day = data["day"]
+        current_day: datetime.date = data["day"]
     except KeyError:
-        current_day = datetime.today()
+        current_day: datetime.date = datetime.today()
+
+    logger.trace(f"type: {type(current_day)}")
     user_id = callback_query.from_user.id
     logger.info("Получение данных о группах студента")
     group_info = student.get_groups(user_id)
@@ -453,9 +455,9 @@ async def schedule_button(callback_query, state: FSMContext):
     logger.debug(f"Занятия(без обработки): {all_raw_lessons}")
 
     logger.info("Создание фото расписания")
-    schedule_photo = schedule.get_schedule_photo(student_tuple, schedule_db, all_raw_lessons[0]["real_lessons"])
+    schedule_photo = schedule.get_schedule_photo(student_tuple, schedule_db, all_raw_lessons[0]["real_lessons"],
+                                                 current_day)
 
-    text_lessons = ""
     # Отображение как "среда, 14 фев."
     day_text = current_day.strftime("%A, %d %b:\n")
 

@@ -201,7 +201,8 @@ class Schedule(Base):
                     session.query(Schedule).filter_by(name=lesson[0], date=lesson[5], group_id=lesson[9]).delete()
             session.commit()
 
-    def get_schedule_raw_image(self, lessons) -> Image.Image:
+    @staticmethod
+    def get_schedule_raw_image(lessons) -> Image.Image:
         """
         Делает стандартную картинку расписания с заданным кол-во занятий
         """
@@ -276,7 +277,7 @@ class Schedule(Base):
                     text_lessons = "<b>" + lesson[0] + "</b>. "
                     if user_settings["show_lesson_type"] == 1:
                         elements.append(lesson[1])
-                    if user_settings["show_adress"] == 1:
+                    if user_settings["show_address"] == 1:
                         elements.append(lesson[2])
                     if user_settings["show_room"] == 1:
                         elements.append(lesson[3])
@@ -311,14 +312,15 @@ class Schedule(Base):
 
             return student_notification
 
-    def get_schedule_photo(self, student: tuple, lessons: list, real_lessons: int):
+    def get_schedule_photo(self, student_param: tuple, lessons: list, real_lessons: int, current_day: datetime.date):
         """
         Функция создаст фото с расписанием текущего дня
         """
+        logger.trace(f"В get_schedule_photo передан student_param как: {student_param}")
         raw_image = self.get_schedule_raw_image(real_lessons)
 
         # Взять настройки студента по его id
-        user_settings = settings.get_settings(student[6])
+        user_settings = settings.get_settings(student_param[6])
 
         draw = ImageDraw.Draw(raw_image)
 
@@ -326,7 +328,7 @@ class Schedule(Base):
         font = ImageFont.truetype("grsu/schedule/images/Prosto_Sans_Bold.otf", 24)
 
         # TODO: Изменить, чтобы не рисовало не только сегодняшний день
-        date = datetime.today().strftime("%d.%m.%Y")
+        date = current_day.strftime("%d.%m.%Y")
 
         # drawing text size 
         draw.text((715 + 103, 174), date, fill=(0, 0, 0, 255), font=font, align="left", anchor="ma")
@@ -344,11 +346,11 @@ class Schedule(Base):
 
         lesson_room_px = 140
         lesson_room_py = 420
-        lab_groups = student[1:5]
+        lab_groups = student_param[1:5]
         for lesson in lessons:
             logger.debug(f"Занятие: {lesson}")
             # Если студент есть в той группе, в которой должно быть отправлено уведомление, то вот проверка
-            if lesson[9] == student[0] or lesson[10] in lab_groups:
+            if lesson[9] == student_param[0] or lesson[10] in lab_groups:
                 if "УСР" in lesson[1].upper() and user_settings["show_USR"] == 0:
                     continue
                 if "ФАКУЛЬТАТИВ" in lesson[1].upper() and user_settings["show_facultative"] == 0:
@@ -361,7 +363,11 @@ class Schedule(Base):
                 # Лист в котором хранится все данные об уроке, кроме его названия
                 # elements = []
                 # text_lessons = "<b>" + lesson[0] + "</b>. "
-                draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font,
+                if len(lesson[0]) > 35:
+                    draw.text((lesson_name_px, lesson_name_py), lesson[0][:36]+"...", fill="#ee6664", font=lesson_name_font,
+                              align="left")
+                else:
+                    draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font,
                           align="left")
 
                 # elements.append(lesson[1])  # Тип занятия
