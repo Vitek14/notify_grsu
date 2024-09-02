@@ -131,8 +131,7 @@ class Schedule(Base):
     @staticmethod
     def get_groups() -> list:
         """
-        Вернёт лист, в котором будут находиться все ОСНОВНЫЕ группы(study_group)
-        По которым следует искать расписания
+        :return: Вернёт лист, в котором будут находиться все ОСНОВНЫЕ группы(study_group) студентов
         """
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
@@ -143,7 +142,7 @@ class Schedule(Base):
             schedule_groups = session.query(Student.group_0).all()
         for group in schedule_groups:
             groups_id.append(group[0])
-        return list(set(groups_id))  # Нужно, чтобы убрать дупликаты
+        return list(set(groups_id))  # Нужно, чтобы убрать дубликаты
 
     def get_new_lessons(self, groups_ids: list):
         """
@@ -400,7 +399,7 @@ class Schedule(Base):
         return bio
 
     async def notify(self, bot) -> None:
-        print("Отрабатывает функция NOTIFY")
+        logger.info("Отрабатывает функция оповещения")
         groups_ids = self.get_groups()
         new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
         self.update_db(new_notify, deleted_notify, dont_notify)

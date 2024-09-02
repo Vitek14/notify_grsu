@@ -19,7 +19,8 @@ settings_dict = {
         "Показывать группу": "show_group"
     },
     "Расписание": {
-        "text": "Данные настройки влияют на отображение расписания",
+        "text": "Данные настройки влияют на отображение расписания."
+                "Большинство из них влияет только на текстовую версию",
         "Показывать УСР": "show_USR",
         "Показывать адрес": "show_address",
         "Показывать кабинет": "show_room",
@@ -28,13 +29,25 @@ settings_dict = {
         "Показывать время начала": "show_start_time",
         "Показывать время конца": "show_end_time",
         "Показывать факультативные занятия": "show_facultative",
-        "Показывать тип занятия": "show_lesson_type"
+        "Показывать тип занятия": "show_lesson_type",
+        "Уведомлять об изменении расписания на N дней вперёд": "days_notify"
     }
 }
 
 settings_buttons = {
-    "Инфо": [[KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")], [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")], [KeyboardButton(text="Убрать это..."), KeyboardButton(text="Назад")]],
-    "Расписание": [[KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")], [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")], [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")], [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")], [KeyboardButton(text="Показывать тип занятия")], [KeyboardButton(text="Убрать это..."), KeyboardButton(text="Назад")]]
+    "Инфо": [
+        [KeyboardButton(text="Показывать факультет"), KeyboardButton(text="Показывать специальность")],
+        [KeyboardButton(text="Показывать почту"), KeyboardButton(text="Показывать группу")],
+        [KeyboardButton(text="Убрать это..."), KeyboardButton(text="Назад")]
+    ],
+    "Расписание": [
+        [KeyboardButton(text="Показывать УСР"), KeyboardButton(text="Показывать адрес")],
+        [KeyboardButton(text="Показывать кабинет"), KeyboardButton(text="Показывать учителя")],
+        [KeyboardButton(text="Показывать полностью дату"), KeyboardButton(text="Показывать время начала")],
+        [KeyboardButton(text="Показывать время конца"), KeyboardButton(text="Показывать факультативные занятия")],
+        [KeyboardButton(text="Показывать тип занятия")],
+        [KeyboardButton(text="Убрать это..."), KeyboardButton(text="Назад")]
+    ]
 }
 
 proxy_list_http = [
