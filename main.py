@@ -30,7 +30,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from settings import API_KEY, logging_level
+from settings import API_KEY, logging_level, schedule_check_interval
 from settings import settings_dict, settings_buttons
 
 import platform
@@ -513,8 +513,7 @@ class MyHandler(ErrorHandler):
 
 async def start():
     print("Бот готов к работе")
-    # job = scheduler.add_job(schedule.notify, "interval", minutes=5, args=[bot])
-    job = scheduler.add_job(schedule.notify, "interval", seconds=15, args=[bot])
+    job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
     scheduler.start()
     logger.success("Успешный запуск бота")
     await dp.start_polling(bot)

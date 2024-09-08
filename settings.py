@@ -63,4 +63,6 @@ proxy_list_https = [
     "http://172.96.117.205:38001",
 ]
 
-logging_level = "TRACE"  # Обычно не нужно менять
+logging_level = "WARNING"  # Обычно не нужно менять
+
+schedule_check_interval = "10"  # В минутах
