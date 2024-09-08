@@ -513,8 +513,9 @@ class MyHandler(ErrorHandler):
 
 async def start():
     print("Бот готов к работе")
-    # job = scheduler.add_job(schedule.notify, "interval", minutes=2, args=[bot])
-    # scheduler.start()
+    # job = scheduler.add_job(schedule.notify, "interval", minutes=5, args=[bot])
+    job = scheduler.add_job(schedule.notify, "interval", seconds=15, args=[bot])
+    scheduler.start()
     logger.success("Успешный запуск бота")
     await dp.start_polling(bot)
 

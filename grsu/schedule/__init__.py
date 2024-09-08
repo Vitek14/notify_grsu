@@ -1,3 +1,5 @@
+from typing import Tuple, List, Any, Dict, Set
+
 from loguru import logger
 from requests import delete
 from sqlalchemy import Column, Integer, String
@@ -18,6 +20,8 @@ from grsu.student import Student
 from grsu.student.settings import Settings
 
 from ..exceptions import ScheduleNotFound
+import time
+from pprint import pformat
 
 Base = declarative_base()
 student = Student()
@@ -62,10 +66,11 @@ class Schedule(Base):
     from ._web import get_raw_schedule, process_schedule
 
     @staticmethod
-    def get_schedule_from_db() -> list:
+    def get_schedule_from_db(group_id: int | None = None) -> list:
         """
-        Функция выдаёт всё расписание по группе.
-        :group_id: ID группы, для которого искать расписание
+        Функция найдёт все расписание/расписание по группе.
+        :param group_id: (Необязательно)ID study_group, чтобы искать по нему.
+        :return: Лист с расписанием из базы данных
         """
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
@@ -73,10 +78,18 @@ class Schedule(Base):
         Session = sessionmaker(engine)
         with Session() as session:
             # schedule = session.query(Schedule).filter_by(Schedule.group_id=group_id).all()
-            schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
-                                              Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
-                                              Schedule.day, Schedule.start_time,
-                                              Schedule.end_time, Schedule.group_id, Schedule.subgroup_id)).all()
+            if not group_id:
+                schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+                                                  Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                                  Schedule.day, Schedule.start_time,
+                                                  Schedule.end_time, Schedule.group_id, Schedule.subgroup_id)).all()
+            else:
+                logger.trace(f"")
+                schedule = session.execute(select(Schedule.name, Schedule.lesson_type,
+                                                  Schedule.place, Schedule.room, Schedule.teacher, Schedule.date,
+                                                  Schedule.day, Schedule.start_time,
+                                                  Schedule.end_time, Schedule.group_id,
+                                                  Schedule.subgroup_id).where(Schedule.group_id == group_id)).all()
         return schedule
 
     @staticmethod
@@ -144,58 +157,118 @@ class Schedule(Base):
             groups_id.append(group[0])
         return list(set(groups_id))  # Нужно, чтобы убрать дубликаты
 
-    def get_new_lessons(self, groups_ids: list):
+    @staticmethod
+    def process_new_lessons(new_lessons: list[tuple], db_schedule: list[tuple]) -> tuple[
+        list[tuple], list[dict], list[tuple]
+    ]:
         """
-        Функция выведет предметы, которые добавились в расписание
-        :groups_ids: Лист, содержащий id каждой группы
+        Обработает 'новые занятия' на правда новые и изменённые.
+        :param db_schedule: Расписание из базы данных.
+        :param new_lessons: Лист, содержащий все потенциально новые занятия в виде кортежей.
+        :return: Переменные с новыми занятиями, изменёнными, а также занятия, которые уже ненужны.
         """
-        raw_schedule = self.get_raw_schedule(groups_ids)
-        group_schedule = self.process_schedule(raw_schedule)
-        db_schedule = self.get_schedule_from_db()
-
-        new_from_web = set(group_schedule) - set(db_schedule)
-        deleted_from_web = set(db_schedule) - set(group_schedule)
-        new_notify = []
-        deleted_notify = []
-
-        dont_notify = []
+        real_new_lessons = []
+        changed_lessons = []
+        very_old_lessons = []
 
         two_weeks_ago = datetime.today() - timedelta(weeks=2)
-        if len(new_from_web) > 0:
-            for lesson in new_from_web:
-                date = datetime.strptime(lesson[5], "%Y-%m-%d")
-                if date > two_weeks_ago:
-                    new_notify.append(lesson)
-                else:
-                    dont_notify.append(lesson)
 
-        if len(deleted_from_web) > 0:
-            for lesson in deleted_from_web:
-                date = datetime.strptime(lesson[5], "%Y-%m-%d")
-                if date > two_weeks_ago:
-                    deleted_notify.append(lesson)
-                else:
-                    dont_notify.append(lesson)
+        # Цикл для каждого занятия. Сверяем что именно добавилось.
+        for lesson in new_lessons:
+            logger.trace(f"Обработка: {lesson}")
+            lesson_date = datetime.strptime(f"{lesson[5]}.{lesson[7]}", "%Y-%m-%d.%H:%M")
+            logger.trace(f"Обработанная дата занятия: {lesson_date}")
+            is_added_lesson = True  # Обозначает, является ли занятие новым в расписании или изменённым
+            if lesson_date > two_weeks_ago:  # TODO: Проверить
+                for old_lesson in db_schedule:
+                    logger.trace(f"Old_lesson: {old_lesson}")
+                    logger.trace(f"New lesson: {lesson}")
+                    notify_add = {}
+                    if old_lesson[0] == lesson[0] and old_lesson[5] == lesson[5] and old_lesson[7] == lesson[7]:
+                        # ВОЗМОЖНО в будущем добавить также сравнение по id группы.
+                        logger.info(f"Изменение в {lesson[0]} на {lesson[5]}")
+                        is_added_lesson = False
+                        notify_add["name"] = lesson[0]
+                        if old_lesson[1] != lesson[1]:
+                            notify_add["lesson_type"] = lesson[1]
+                        if old_lesson[2] != lesson[2]:
+                            notify_add["place"] = lesson[2]
+                        if old_lesson[3] != lesson[3]:
+                            notify_add["room"] = lesson[3]
+                        if old_lesson[4] != lesson[4]:
+                            notify_add["teacher"] = lesson[4]
+                        if old_lesson[7] != lesson[7]:
+                            notify_add["start_time"] = lesson[7]
+                        if old_lesson[8] != lesson[8]:
+                            notify_add["end_time"] = lesson[8]
+                        # Дальше время начала и конца, но нам это неважно
+                        # notify_add["date"] = lesson[5]
+                        notify_add["date"] = lesson[5] + "." + lesson[7]
+                        notify_add["group_id"] = lesson[9]
+                        notify_add["subgroup_id"] = lesson[10]
+                        logger.debug(notify_add)
+                        changed_lessons.append(notify_add)
+                if is_added_lesson:
+                    real_new_lessons.append(lesson)
+            else:
+                very_old_lessons.append(lesson)
 
-        return new_notify, deleted_notify, dont_notify
-        # ДАЛЬШЕ ДЕЛАТЬ ФУНКЦИИ ВСТАВКИ, УДАЛЕНИЯ И ОПОВЕЩЕНИЯ ПОЛЬЗОВАТЕЛЯ
+        return real_new_lessons, changed_lessons, very_old_lessons
 
-        # Сначала нужен цикл, который
+    def get_api_changes(self, group: int) -> tuple[
+        list[tuple] | set[Any], list[tuple] | set[Any], set[tuple[str, str, str, str]]
+    ]:
+        """
+        Функция вернёт лист со словарями, в которых имеются сведения о конкретных изменениях.
+        :param group: ID study_group.
+        :return: Лист из словарей, в которых содержатся сведения об изменениях.
+        """
+        logger.info("Получение новых занятий(get_new_lessons)")
+        tic = time.perf_counter()
+        raw_schedule = self.get_raw_schedule([group])
+        toc = time.perf_counter()
+        logger.trace(f"Расписание взято из API за {toc - tic:0.4f}")
+        group_schedule = self.process_schedule(raw_schedule)
 
-    def update_db(self, new_notify, deleted_notify, dont_notify) -> None:
+        db_schedule = self.get_schedule_from_db(group_id=group)
+
+        logger.trace(f"group_schedule: {group_schedule}")
+        logger.trace(f"db_schedule: {db_schedule}")
+
+        new_from_web = set(group_schedule) - set(db_schedule)  # TODO: Возможно добавить штуку,
+        # чтобы была ГРУППИРОВКА по одинаковым изменениям?
+        logger.debug(pformat(new_from_web))
+
+        deleted_from_web = set(db_schedule) - set(group_schedule)
+
+        # Далее получаем что действительно было удалено из расписания
+        basic_group_schedule: list[tuple[str, str, str, str]] = [
+            (item[0], item[5], item[7], item[8]) for item in group_schedule
+        ]
+        basic_db_schedule: list[tuple[str, str, str, str]] = [
+            (item[0], item[5], item[7], item[8])for item in db_schedule
+        ]
+        real_deleted_from_web = set(basic_db_schedule) - set(basic_group_schedule)
+
+        logger.debug(f"Новое из API: {new_from_web}")
+        logger.debug(f"Удалено из API: {deleted_from_web}")
+        if len(deleted_from_web) == 0:
+            deleted_from_web = []
+        return new_from_web, deleted_from_web, real_deleted_from_web
+
+    @staticmethod
+    def update_db(new_notify, deleted_notify, very_old_lessons) -> None:
         engine = create_engine('sqlite:///user.db')
         Base.metadata.create_all(engine)
         Session = sessionmaker(engine)
-
-        # Нужно фильтровать! Там где deleted_from_web, то если дата прошлая, то не отправлять сообщения
 
         with Session() as session:
             if len(new_notify) > 0:
                 actual_data = [(None, *t) for i, t in enumerate(new_notify)]
                 session.execute(insert(Schedule).values(actual_data))  # type: ignore
             # Объединяем 2 листа, которые нужно удалить
-            if len(deleted_notify) > 0 or len(dont_notify) > 0:
-                deletable = deleted_notify + dont_notify
+            if len(deleted_notify) > 0 or len(very_old_lessons) > 0:
+                deletable = list(deleted_notify) + very_old_lessons
                 for lesson in deletable:
                     session.query(Schedule).filter_by(name=lesson[0], date=lesson[5], group_id=lesson[9]).delete()
             session.commit()
@@ -229,6 +302,73 @@ class Schedule(Base):
         # # Показываем итоговое изображение
         # im1.show()
         return im1
+
+    @staticmethod
+    def get_human_date(date: datetime, compare_date: datetime) -> str:
+        """
+        Превратит дату в нормальную читабельную строку.
+        :param date: Исходная дата.
+        :param compare_date: Дата, с которой нужно сравнивать.
+        :return: Строка(Завтра/Послезавтра/Вчера/...)
+        """
+        human_date = date.strftime("%A")
+        logger.debug(f"Date.day is {date.day} and compare_date.day is {compare_date.day}")
+        logger.trace(f"+1: {(date + timedelta(days=1)).day}; {(compare_date + timedelta(days=1)).day}")
+        if date.day == compare_date.day:
+            human_date = "Сегодня"
+        if date.day == (compare_date + timedelta(days=1)).day:
+            human_date = "Завтра"
+        if date.day == (compare_date + timedelta(days=2)).day:
+            human_date = "Послезавтра"
+        if date.day == (compare_date - timedelta(days=1)).day:
+            human_date = "Вчера"
+        if date.day == (compare_date - timedelta(days=2)).day:
+            human_date = "Позавчера"
+        return human_date
+
+    def get_new_lessons_text(self, new_lessons: list[tuple], max_date: datetime, min_date: datetime) -> str:
+        """
+        Сделает текст для новых занятий.
+        :param min_date: Дата, до которой оповещать не нужно.
+        :param max_date: Дата, после которой оповещать не нужно.
+        :param new_lessons: Лист из кортежей, в которых хранится информация о новых занятиях.
+        :return: Текст оповещения о новых занятий.
+        """
+        text = "Добавлено в расписание:\n"
+        for lesson in new_lessons:
+            logger.warning(f"Может быть проблема с переводом текста в дату в get_new_lessons_text")
+            date = datetime.strptime(lesson[5], "%Y-%m-%d")
+            human_date = self.get_human_date(date, datetime.today())
+            if date > max_date or date < min_date:
+                logger.trace(f"Пропущено занятие({lesson})")
+                continue
+            text += f"{lesson[0]} - {human_date} в {lesson[7]}\n"
+        return text
+
+    def get_changed_schedule_text(self, changed_lessons: list[dict[str, str | int | datetime]],
+                                  max_date: datetime, min_date: datetime) -> str:
+        text = "Изменения в расписании:\n"
+        for lesson in changed_lessons:
+            date = datetime.strptime(lesson["date"], "%Y-%m-%d.%H:%M")
+            human_date = self.get_human_date(date, datetime.today())  # TODO: ПРОВЕРИТЬ
+            logger.debug(f"Полученная дата в человеческом формате: {human_date}")
+            logger.trace(f"Переменные date и max_date и min_date: {date}; {max_date}; {min_date}")
+            if date > max_date or date < min_date:
+                logger.trace(f"Пропущено занятие({lesson})")
+                continue
+            logger.debug(f"Обработка 'get_changed_schedule_text для {lesson}'")
+            text += f"{lesson['name']}({human_date})\n"
+            for ch_key, ch_v in lesson.items():
+                if ch_key == "lesson_type":
+                    text += f"  Тип занятия изменён на {ch_v}\n"
+                if ch_key == "place":
+                    text += f"  Адрес изменён на {ch_v}\n"
+                if ch_key == "room":
+                    text += f"  Аудитория изменена на {ch_v}\n"
+                if ch_key == "teacher":
+                    text += f"  Сменился преподаватель на {ch_v}\n"
+        logger.debug(text)
+        return text
 
     @staticmethod
     def get_schedule_text(lessons: list, student_groups: list, is_notify: bool) -> list:
@@ -363,11 +503,12 @@ class Schedule(Base):
                 # elements = []
                 # text_lessons = "<b>" + lesson[0] + "</b>. "
                 if len(lesson[0]) > 35:
-                    draw.text((lesson_name_px, lesson_name_py), lesson[0][:36]+"...", fill="#ee6664", font=lesson_name_font,
+                    draw.text((lesson_name_px, lesson_name_py), lesson[0][:36] + "...", fill="#ee6664",
+                              font=lesson_name_font,
                               align="left")
                 else:
                     draw.text((lesson_name_px, lesson_name_py), lesson[0], fill="#ee6664", font=lesson_name_font,
-                          align="left")
+                              align="left")
 
                 # elements.append(lesson[1])  # Тип занятия
 
@@ -401,17 +542,35 @@ class Schedule(Base):
     async def notify(self, bot) -> None:
         logger.info("Отрабатывает функция оповещения")
         groups_ids = self.get_groups()
-        new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
-        self.update_db(new_notify, deleted_notify, dont_notify)
+        tic = time.perf_counter()
+        # Будем получать новые занятия для каждой группы!!
+        for group in groups_ids:
+            db_schedule = self.get_schedule_from_db(group_id=group)
+            # new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
+            new_lessons, deleted_lessons, real_deleted_lessons = self.get_api_changes(group)
+            if (len(new_lessons) and real_deleted_lessons) == 0:
+                logger.info(f"Изменений для {group} нет.")
+                continue
 
-        student_groups = student.get_groups_all()
-        new_notify_text = self.get_schedule_text(new_notify, student_groups, True)
-        deleted_notify_text = self.get_schedule_text(deleted_notify, student_groups, True)
-        for text in new_notify_text:
-            if len(text["text"]) == 0:
-                continue
-            await bot.send_message(text["id"], "Добавлено:\n" + text["text"], parse_mode="HTML")
-        for text in deleted_notify_text:
-            if len(text["text"]) == 0:
-                continue
-            await bot.send_message(text["id"], "Удалено:\n" + text["text"], parse_mode="HTML")
+            groups_info = student.get_students_with_group(group)
+            for student_group in groups_info:
+                notify_text = ""
+                st_settings = settings.get_settings(student_group[6])
+                logger.debug(f"Получены настройки для telegram id {student_group[6]}: {st_settings}")
+                max_date_notify = datetime.today() + timedelta(days=st_settings["days_notify"])
+                back_days_notify = datetime.today() - timedelta(days=st_settings["back_days_notify"])
+                if len(new_lessons) > 0:  # Значит, что изменения точно существуют и их нужно обработать
+                    logger.debug(f"NEW LESSONS: {new_lessons}")
+                    real_new_lessons, changed_lessons, very_old_lessons = self.process_new_lessons(new_lessons,
+                                                                                                   db_schedule)
+                    if len(changed_lessons) > 0:
+                        changed_lessons_text = self.get_changed_schedule_text(changed_lessons, max_date_notify,
+                                                                              back_days_notify)
+                        notify_text += changed_lessons_text
+                    if len(real_new_lessons) > 0:
+                        new_lessons_text = self.get_new_lessons_text(new_lessons, max_date_notify, back_days_notify)
+                        notify_text += new_lessons_text
+                    await bot.send_message(student_group[6], notify_text)
+                    self.update_db(new_lessons, deleted_lessons, very_old_lessons)
+                if len(real_deleted_lessons) > 0:
+                    pass

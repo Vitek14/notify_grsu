@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
+from loguru import logger
 
 Base = declarative_base()
 
@@ -66,6 +67,21 @@ class Mixin:
             groups_info = session.execute(select(Student.group_0, Student.group_1, Student.group_2, Student.group_3,
                                                  Student.group_4, Student.group_5, Student.tg_id)).all()
 
+        return groups_info
+
+    def get_students_with_group(self, group_id: int) -> list[tuple]:
+        """
+        Функция находит всех студентов с определённой группой.
+        :param group_id: ID study_group/ID основной группы.
+        :return: Лист из кортежей, хранящие основные данные студентов
+        """
+        Student = self.__class__
+        with Session() as session:
+            groups_info = session.execute(select(Student.group_0, Student.group_1,
+                                                 Student.group_2, Student.group_3,
+                                                 Student.group_4, Student.group_5,
+                                                 Student.tg_id).where(Student.group_0 == group_id)).all()
+            logger.debug(f"Groups_info: {groups_info}")
         return groups_info
 
     def get_marks(self, user_id: int) -> Sequence:

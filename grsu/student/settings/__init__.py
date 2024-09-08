@@ -35,6 +35,8 @@ class Settings(Base):
     show_end_time: Mapped[int] = mapped_column(nullable=False, default=1)
     show_facultative: Mapped[int] = mapped_column(nullable=False, default=1)
     show_lesson_type: Mapped[int] = mapped_column(nullable=False, default=1)
+    days_notify: Mapped[int] = mapped_column(nullable=False, default=2)
+    back_days_notify: Mapped[int] = mapped_column(nullable=False, default=0)
 
     @staticmethod
     def create_settings(user_id: int) -> None:
