@@ -65,4 +65,4 @@ proxy_list_https = [
 
 logging_level = "WARNING"  # Обычно не нужно менять
 
-schedule_check_interval = "10"  # В минутах
+schedule_check_interval = 15  # В минутах
