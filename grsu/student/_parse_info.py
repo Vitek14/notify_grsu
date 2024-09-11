@@ -1,5 +1,7 @@
 import grequests
 import json
+
+from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +30,10 @@ class ParseMixin:
             info_about_student = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
                 "method": "getEmployeesData"
             }, cookies=token_info)
+            logger.debug(f"Код employees_data: {info_about_student.status_code}")
+            if info_about_student.status_code != 200:
+                logger.warning(f"https://edu.grsu.by/custom-components/custom-api/ajax-router.php выдала код "
+                               f"{info_about_student.status_code}")
             info = json.loads(info_about_student.text)
         return info
 

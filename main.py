@@ -12,9 +12,9 @@ from datetime import timedelta
 from functions.auth import auth
 from functions.select_info import select_auth_info, get_attestation
 from grsu.exceptions import *
-from grsu.schedule import Schedule          # Отвечает за расписание
-from grsu.student import Student            # Отвечает за все методы, связанные со студентом
-from grsu.student.marks import Marks        # Отвечает за оценки студента
+from grsu.schedule import Schedule  # Отвечает за расписание
+from grsu.student import Student  # Отвечает за все методы, связанные со студентом
+from grsu.student.marks import Marks  # Отвечает за оценки студента
 from grsu.student.settings import Settings  # Отвечает за настройки пользователя
 
 from loguru import logger
@@ -36,6 +36,8 @@ from settings import settings_dict, settings_buttons
 import platform
 import sys
 
+from pprint import pformat
+
 logger.remove()
 logger.add("debug.log", format="{time} {level} {message}", level="DEBUG", rotation="10:00", compression="zip")
 
@@ -43,7 +45,14 @@ logger.add("debug.log", format="{time} {level} {message}", level="DEBUG", rotati
 logger.add(sys.stderr, level=logging_level)
 
 # Устанавливаем русскую локализацию
-if platform.system() == "Windows":
+if not sys.getdefaultencoding() == "utf-8":
+    logger.warning(pformat("КОДИРОВКА В CMD НЕ UTF-8. НАСТОЯТЕЛЬНО РЕКОМЕНДУЕТСЯ ИЗМЕНИТЬ ЭТО. "
+                           "Прочитайте следующий гайд как изменить кодировку для Windows: "
+                           "https://sysadminium.ru/change-windows-cmd-encoding-to-utf-8/"
+                           " Для других систем(Linux/Mac) попробуйте сами изменить кодировку"
+                           " в настройках вашей командной строки. "
+                           "Мы попробуем сейчас применить к вам стандартный метод setlocale для русского языка,"
+                           " но вы всё ещё можете получать ошибки"))
     locale.setlocale(locale.LC_TIME, 'ru_RU')
 else:
     locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
@@ -505,6 +514,7 @@ class MyHandler(ErrorHandler):
     """
     Класс обрабатывает любые внезапные ошибки, происходящие в коде
     """
+
     async def handle(self):
         logger.opt(exception=True).error("Информация об ошибке: {error}.(*{error_info}*)\n"
                                          "Детали: {details}", error=self.exception_name,
@@ -514,6 +524,7 @@ class MyHandler(ErrorHandler):
 async def start():
     print("Бот готов к работе")
     job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
+    # student_check = scheduler.add_job()
     scheduler.start()
     logger.success("Успешный запуск бота")
     await dp.start_polling(bot)

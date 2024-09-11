@@ -216,7 +216,7 @@ class Schedule(Base):
         return real_new_lessons, changed_lessons, very_old_lessons
 
     def get_api_changes(self, group: int) -> tuple[
-        list[tuple] | set[Any], list[tuple] | set[Any], set[tuple[str, str, str, str]]
+        list[tuple] | set[Any], list[tuple] | set[Any], list[tuple[str, str, str, str]] | set
     ]:
         """
         Функция вернёт лист со словарями, в которых имеются сведения о конкретных изменениях.
@@ -326,23 +326,40 @@ class Schedule(Base):
             human_date = "Позавчера"
         return human_date
 
-    def get_new_lessons_text(self, new_lessons: list[tuple], max_date: datetime, min_date: datetime) -> str:
+    def get_provided_lessons_text(
+            self, provided_lessons: list[tuple], max_date: datetime, min_date: datetime, provider="NEW"
+    ) -> str:
         """
         Сделает текст для новых занятий.
+        :param provider: Указатель какие занятия предоставлены. ВОЗМОЖНЫЕ ВАРИАНТЫ: NEW и DELETED.
         :param min_date: Дата, до которой оповещать не нужно.
         :param max_date: Дата, после которой оповещать не нужно.
-        :param new_lessons: Лист из кортежей, в которых хранится информация о новых занятиях.
+        :param provided_lessons: Лист из кортежей, в которых хранится информация о новых занятиях.
         :return: Текст оповещения о новых занятий.
         """
-        text = "Добавлено в расписание:\n"
-        for lesson in new_lessons:
-            logger.warning(f"Может быть проблема с переводом текста в дату в get_new_lessons_text")
-            date = datetime.strptime(lesson[5], "%Y-%m-%d")
+        text = ""
+        date = datetime.today()
+
+        if provider == "NEW":
+            text = "Добавлено в расписание:\n"
+        elif provider == "DELETED":
+            text = "Удалено из расписания:\n"
+        else:
+            logger.error(f"Параметр provider может быть только NEW или DELETED. Предоставлено: {provider}")
+        for lesson in provided_lessons:
+            if provider == "NEW":
+                date = datetime.strptime(f"{lesson[5]}.{lesson[7]}", "%Y-%m-%d.%H:%M")
+            elif provider == "DELETED":
+                date = datetime.strptime(f"{lesson[1]}.{lesson[2]}", "%Y-%m-%d.%H:%M")
             human_date = self.get_human_date(date, datetime.today())
             if date > max_date or date < min_date:
                 logger.trace(f"Пропущено занятие({lesson})")
                 continue
-            text += f"{lesson[0]} - {human_date} в {lesson[7]}\n"
+            if provider == "NEW":
+                text += f"{lesson[0]} - {human_date} в {lesson[7]}\n"
+            elif provider == "DELETED":
+                text += f"{lesson[0]} - {human_date}\n"
+            logger.debug(f"text в new_lessons: {text}")
         return text
 
     def get_changed_schedule_text(self, changed_lessons: list[dict[str, str | int | datetime]],
@@ -456,6 +473,7 @@ class Schedule(Base):
         Функция создаст фото с расписанием текущего дня
         """
         logger.trace(f"В get_schedule_photo передан student_param как: {student_param}")
+        lessons = sorted(lessons, key=lambda x: x[7])
         raw_image = self.get_schedule_raw_image(real_lessons)
 
         # Взять настройки студента по его id
@@ -546,7 +564,6 @@ class Schedule(Base):
         # Будем получать новые занятия для каждой группы!!
         for group in groups_ids:
             db_schedule = self.get_schedule_from_db(group_id=group)
-            # new_notify, deleted_notify, dont_notify = self.get_new_lessons(groups_ids)
             new_lessons, deleted_lessons, real_deleted_lessons = self.get_api_changes(group)
             if (len(new_lessons) and real_deleted_lessons) == 0:
                 logger.info(f"Изменений для {group} нет.")
@@ -568,9 +585,14 @@ class Schedule(Base):
                                                                               back_days_notify)
                         notify_text += changed_lessons_text
                     if len(real_new_lessons) > 0:
-                        new_lessons_text = self.get_new_lessons_text(new_lessons, max_date_notify, back_days_notify)
+                        new_lessons_text = self.get_provided_lessons_text(
+                            new_lessons, max_date_notify, back_days_notify
+                        )
+                        notify_text += new_lessons_text
+                    if len(real_deleted_lessons) > 0:
+                        new_lessons_text = self.get_provided_lessons_text(
+                            real_deleted_lessons, max_date_notify, back_days_notify, provider="DELETED"
+                        )
                         notify_text += new_lessons_text
                     await bot.send_message(student_group[6], notify_text)
                     self.update_db(new_lessons, deleted_lessons, very_old_lessons)
-                if len(real_deleted_lessons) > 0:
-                    pass
