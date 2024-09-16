@@ -30,6 +30,22 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
     group_5: Mapped[int]
     tg_id: Mapped[int]
 
+    def __encrypt_data(self, data: dict, password: str) -> None:
+        """
+        Зашифрует данные для последующего внесения в базу данных.
+        :param password: Пароль шифрования.
+        :param data: Словарь для шифрования
+        """
+        pass
+
+    def check_token(self, user_id: int) -> bool:
+        """
+        Проверит токен на 'валидность'.
+        :param user_id: ID Telegram пользователя.
+        :return: True или False в зависимости от верности токена.
+        """
+        pass
+
     @staticmethod
     def refresh_token(new_token: dict, tg_id: int) -> None:
         engine = create_engine('sqlite:///user.db')
@@ -54,6 +70,25 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
                 return True
             else:
                 return False
+
+    # @staticmethod
+    def check_groups_info(self, user_id: int) -> bool:
+        """
+        Проверит правильные ли данные групп студента.
+        :param user_id: ID Telegram пользователя для проверки.
+        :return: True или False в зависимости от верности данных групп(и лабораторных в т.ч)
+        """
+        # self.get_token()
+        pass
+
+    @staticmethod
+    def refresh_groups_info(user_id: int) -> None:
+        """
+        Обновит данные групп студента
+        :param user_id: ID Telegram пользователя для обновления.
+        """
+        pass
+
 
     @staticmethod
     def create_new_student(user_id: int, auth_info: dict, login: str, password: str) -> None:
