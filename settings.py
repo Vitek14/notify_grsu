@@ -9,6 +9,8 @@ dotenv.load_dotenv(".env")
 
 # PUT YOUR API_KEY FOR TELEGRAM BOT TO .env FILE. YOUR .env SHOULD LOOK LIKE THIS: API_KEY=YOUR_KEY
 API_KEY = os.environ["API_KEY"]
+web_panic = False  # Нужен, если вебсайт ГрГУ не отвечает.
+api_panic = False  # Нужен, если API(Расписание) ГрГУ не отвечает
 
 settings_dict = {
     "Инфо": {

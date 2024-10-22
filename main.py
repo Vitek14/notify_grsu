@@ -4,6 +4,7 @@ import locale
 # Для нормальной обработки контента
 # Для чистки текста от html тегов
 import re
+import time
 from datetime import datetime
 # Импорт даты, чтобы показывать расписание более приятным способом
 from datetime import timedelta
@@ -13,9 +14,10 @@ from functions.auth import auth
 from functions.select_info import select_auth_info, get_attestation
 from grsu.exceptions import *
 from grsu.schedule import Schedule  # Отвечает за расписание
-from grsu.student import Student  # Отвечает за все методы, связанные со студентом
+from grsu.student import Student, StudentInfo  # Отвечает за все методы, связанные со студентом
 from grsu.student.marks import Marks  # Отвечает за оценки студента
 from grsu.student.settings import Settings  # Отвечает за настройки пользователя
+from grsu.notify import notify
 
 from loguru import logger
 
@@ -29,6 +31,8 @@ from aiogram.types import BufferedInputFile
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from aiohttp import ClientSession
 
 from settings import API_KEY, logging_level, schedule_check_interval
 from settings import settings_dict, settings_buttons
@@ -62,6 +66,7 @@ CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 bot = Bot(API_KEY)
 
 student = Student()
+student_info = StudentInfo()
 st_marks = Marks()
 schedule = Schedule()
 st_settings = Settings()
@@ -124,7 +129,9 @@ def set_default_preferences(tg_id):
 async def login_command(message, state):
     text = message.text.split(" ")
     if len(text) < 3 or len(text) > 3:
-        await message.answer(text="Неправильно введены данные!")
+        await message.answer(text="Неправильно введены данные!\n"
+                                  "Требуется вводить /login ЛОГИН ПАРОЛЬ\n"
+                                  "Данная процедура усложнена из соображений безопасности.")
         return
     login = text[1]
     password = text[2]
@@ -136,6 +143,8 @@ async def login_command(message, state):
 
     # Функция входа
     try:
+        # async with ClientSession() as session:
+            # auth_info = await student.async_auth(login, password, session)
         auth_info = student.auth(login, password)
     except InvalidCredentialsError:
         await waiting_message.edit_text(text=InvalidCredentialsError().message)
@@ -150,8 +159,10 @@ async def login_command(message, state):
         st_settings.create_settings(user_id)
 
     await waiting_message.edit_text(
-        text="Вы это сделали! Теперь вы авторизованы в боте. Учтите, что вы всегда можете удалить ваши данные с "
-             "помощью /delete")
+        text="Авторизация успешна! Теперь введите /info"
+             "чтобы единоразово получить базовую информацию(группы, курс и т.д.\n"
+             "Вы также можете удалить ваши данные из локальной базы данных с помощью /delete"
+    )
 
 
 @dp.message(Command("attestation"))
@@ -276,9 +287,26 @@ async def info_settings_reply(message, state: FSMContext) -> None:
 @clear_state
 async def start_command(message, state):
     logger.info("Запуск info команды")
-    bot_message = await message.answer(text="Производим запросы...", protect_content=True)
-
     user_id = message.from_user.id
+    bot_message = await message.answer(text="Секундочку...", protect_content=True)
+    # ТРЕБУЕТСЯ ДОДЕЛАТЬ
+    # TODO: Создать отдельную ветку для перехода на aiohttp?
+    # info_exist = student_info.basic_info_exists(user_id)
+    # if info_exist:
+    #     bot_message = await message.answer(text="Секундочку...", protect_content=True)
+    #     info = student_info.get_all_info(user_id)
+    # else:
+    #     bot_message = await message.answer(text="Мы выполняем базовые запросы для вас.\n"
+    #                                             "Т.к это первый раз, это займёт ~10 секунд.", protect_content=True)
+    #     async with ClientSession() as session:
+    #         # Получение данных о логине и пароле
+    #         login_info = student.get_login(user_id)
+    #         tasks = [
+    #             await student.async_auth(login_info["login"], login_info["password"], session),
+    #
+    #         ]
+    #     # TODO: ТУТ ДОЛЖНЫ БЫТЬ АСИНХРОННЫЕ ЗАПРОСЫ(РАСПИСАНИЕ, AUTH И Т.Д)
+
     result = student.check_if_exists(user_id)
 
     if not result:
@@ -290,6 +318,8 @@ async def start_command(message, state):
     token_info = student.get_token(user_id)
     logger.info("Получение токена пользователя...")
     about_info = student.get_about(token_info)
+    # async with ClientSession() as session:
+    #     about_info = await student.async_get_about(token_info, session)
     logger.info("Получение базовых данных о студенте...")
     try:
         # Проверяем что в about_info существует полезная информация, иначе токен устарел
@@ -300,6 +330,9 @@ async def start_command(message, state):
         await bot_message.edit_text("Видимо токен устарел, обновляем...")
 
         login_info = student.get_login(user_id)
+            # new_token = await student.async_auth(
+            #     login_info["username"], login_info["password"], session
+            # )
         new_token = student.auth(login_info["username"], login_info["password"])
 
         student.refresh_token(new_token, user_id)
@@ -509,6 +542,23 @@ async def schedule_selected(message, state: FSMContext) -> None:
         await schedule_button(message, state)
 
 
+def web_panic(func) -> None:
+    logger.info("Вебсайт не отвечает.")
+    raise WebsiteConnectionError
+
+
+def api_panic(func) -> None:
+    logger.info("API ГрГУ не отвечает.")
+
+
+async def on_startup():
+    logger.success("Успешный запуск бота")
+
+
+async def on_shutdown():
+    logger.info("Бот остановлен.")
+
+
 @dp.errors()
 class MyHandler(ErrorHandler):
     """
@@ -523,10 +573,12 @@ class MyHandler(ErrorHandler):
 
 async def start():
     print("Бот готов к работе")
+    # async with ClientSession() as session:
     job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
-    # student_check = scheduler.add_job()
+    # job = scheduler.add_job(notify, "interval", seconds=10, args=[session])  # Доделать
     scheduler.start()
-    logger.success("Успешный запуск бота")
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
     await dp.start_polling(bot)
 
 

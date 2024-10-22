@@ -20,6 +20,10 @@ class Mixin:
     """
     Представляет собой обёртку для основных классов Student и Marks
     """
+    def __int__(self):
+        logger.warning("Могут возникнуть ошибки т.к переменная экспериментально присваивается")
+        self.Student = self.__class__
+
     def get_login(self, tg_id: int) -> dict:
         """Получает данные о логине, пароле"""
 
@@ -57,6 +61,16 @@ class Mixin:
                                           .where(Student.tg_id == tg_id)).first()._asdict()
 
         return groups_info
+
+    # Может быть поменять эту функцию
+    def get_active_users(self) -> Sequence:
+        """
+        Получает пользователей, которые пользуются ботом в текущий момент.
+        :return: Объект Sequence, хранящий td_id всех активных пользователей
+        """
+        with Session() as session:
+            active_users = session.execute(select(self.Student.tg_id)).all()
+            return active_users
 
     def get_groups_all(self) -> Sequence:
         """

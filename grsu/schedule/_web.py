@@ -1,9 +1,40 @@
+import asyncio
+
 import grequests
 import json
 from datetime import datetime, timedelta
+
+from aiohttp import ClientResponse
+from aiohttp.client import ClientSession
 from ..exceptions import ScheduleNotFound
 
 
+class AsyncWebScheduleMixin:
+    """
+    Класс представляет из себя "миксин"(обёртку) для основного класса с расписанием.
+    В этом классе представлены асинхронные запросы в расписание
+    """
+
+    @staticmethod
+    async def async_get_raw_schedule(group_id: int, session: ClientSession) -> ClientResponse:
+        current_date = datetime.today()
+        two_weeks_ago = current_date - timedelta(weeks=2)
+        two_month_after = current_date + timedelta(weeks=9)
+
+        month_after_formatted = two_month_after.strftime("%d.%m.%Y")
+        week_ago_formatted = two_weeks_ago.strftime("%d.%m.%Y")
+
+            # Если нет определённой лабораторной группы у студента(None)
+        group_schedule = await session.get(
+            f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={group_id}&dateStart="
+            f"{week_ago_formatted}&dateEnd={month_after_formatted}&lang=ru_RU"
+        )
+
+        # responses = await asyncio.gather(*requests)
+        return group_schedule
+
+
+# @staticmethod  # Может возникнуть ошибка из-за того что функция вне класса
 def get_raw_schedule(self, groups_id: list) -> list:
     current_date = datetime.today()
     two_weeks_ago = current_date - timedelta(weeks=2)

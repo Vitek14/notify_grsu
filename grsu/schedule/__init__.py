@@ -18,6 +18,7 @@ from grsu import student
 
 from grsu.student import Student
 from grsu.student.settings import Settings
+from ._web import AsyncWebScheduleMixin
 
 from ..exceptions import ScheduleNotFound
 import time
@@ -28,7 +29,7 @@ student = Student()
 settings = Settings()
 
 
-class Schedule(Base):
+class Schedule(Base, AsyncWebScheduleMixin):
     """Класс расписания определяет общее расписание студентов, а также их домашние задания"""
     __tablename__ = "schedule"
     rowid: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

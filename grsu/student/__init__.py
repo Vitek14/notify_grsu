@@ -1,12 +1,20 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
-from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Mapped, mapped_column, Session
+from sqlalchemy import create_engine, select
 from sqlalchemy import update
 from .data.select import Mixin
+from .data.student_info.select import SelectInfoMixin
 from ._parse_info import ParseMixin
 from ._auth import AboutMixin
+from loguru import logger
+from settings import base_engine  # TODO: МОЖЕТ БЫТЬ ОШИБКА
+
+logger.warning("Внимание, используется экспериментальный импорт из настроек (base_engine)")
+from aiohttp import ClientSession
 
 Base = declarative_base()
+engine = create_engine(base_engine)
+Base.metadata.create_all(engine)
 
 
 class Student(Base, Mixin, ParseMixin, AboutMixin):
@@ -38,32 +46,33 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
         """
         pass
 
-    def check_token(self, user_id: int) -> bool:
+    def token_validity(self, token_info: dict) -> bool:
         """
         Проверит токен на 'валидность'.
-        :param user_id: ID Telegram пользователя.
+        :param token_info: Информация о токене пользователя.
         :return: True или False в зависимости от верности токена.
         """
-        pass
+
+        about_info = self.about(token_info)
+        # СЛЕДУЮЩИЙ КОД ВЗЯТ ИЗ main.py(А точнее функции /info)
+        try:
+            # Проверяем что в about_info существует полезная информация, иначе токен устарел
+            about_info["userInfo"]
+        except KeyError:
+            return False
+        return True
 
     @staticmethod
     def refresh_token(new_token: dict, tg_id: int) -> None:
-        engine = create_engine('sqlite:///user.db')
-        Base.metadata.create_all(engine)
 
         # Объявляем объект сессии
-        Session = sessionmaker(engine)
         print("Обновление токена")
         with Session() as session:
             session.execute(update(Student).where(Student.tg_id == tg_id).values(new_token))
-            session.commit() 
+            session.commit()
 
     @staticmethod
     def check_if_exists(user_id: int) -> bool:
-        engine = create_engine('sqlite:///user.db')
-        Base.metadata.create_all(engine)
-        # Объявляем объект сессии
-        Session = sessionmaker(engine)
         with Session() as session:
             student_exist = session.query(Student).filter_by(tg_id=user_id).first()
             if student_exist:
@@ -89,13 +98,8 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
         """
         pass
 
-
     @staticmethod
     def create_new_student(user_id: int, auth_info: dict, login: str, password: str) -> None:
-        engine = create_engine('sqlite:///user.db')
-        Base.metadata.create_all(engine)
-        Session = sessionmaker(engine)
-
         about_info = Student().about(auth_info)
         about_info["tg_id"] = user_id
         about_info["username"] = login
@@ -104,3 +108,48 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
             new_student = Student(**about_info)
             session.add(new_student)
             session.commit()
+
+
+class StudentInfo(Base, SelectInfoMixin):
+    """Класс базовой информации о студенте, например ФИО, Факультет, Специальность и т.д"""
+    __tablename__ = "user_info"
+
+    rowid: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    surname: Mapped[str]
+    name: Mapped[str]
+    patronymic: Mapped[str]
+    faculty: Mapped[str]
+    specialization: Mapped[str]
+    internal_email: Mapped[str]
+    group_text: Mapped[str]
+    course_text: Mapped[str]
+    language_code: Mapped[int]
+    main_group: Mapped[int]
+    subgroup_1: Mapped[int]
+    subgroup_2: Mapped[int]
+    subgroup_3: Mapped[int]
+    subgroup_4: Mapped[int]
+    subgroup_5: Mapped[int]
+    subgroup_6: Mapped[int]
+    tg_id: Mapped[int]
+
+    @staticmethod
+    def create_info(info: [dict[str, str | int]]) -> None:
+        with Session() as session:
+            info = Student(**info)
+            session.add(info)
+            session.commit()
+
+    @staticmethod
+    def basic_info_exists(tg_id: int) -> bool:
+        """
+        Вернёт информацию о том, существует ли базовая информация в базе данных.
+        :param tg_id: Telegram ID пользователя.
+        :return: True или False в зависимости от наличия информации в базе данных
+        """
+        with Session() as session:
+            info_exist = session.query(StudentInfo).filter_by(tg_id=tg_id).first()
+            if info_exist:
+                return True
+            else:
+                return False

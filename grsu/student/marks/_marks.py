@@ -18,6 +18,15 @@ Session = sessionmaker(engine)
 CLEAN_TAGS = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 
 
+class MarksWebMixin:
+    """
+    Служит для асинхронного получения оценок
+    """
+
+    @staticmethod
+    async def a_get_courses_names(cookies: dict):
+        pass
+
 def get_courses_data(self, user_id: int, cookies: dict):
     with grequests.Session() as session:
         all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
@@ -25,7 +34,6 @@ def get_courses_data(self, user_id: int, cookies: dict):
         }, cookies=cookies)
         all_courses_json = json.loads(all_courses.text)["1"]["2"]
         return all_courses_json
-
 
 def get_courses_names(self, all_courses: list) -> list:
     course_names = []
