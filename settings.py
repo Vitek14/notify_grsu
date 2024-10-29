@@ -1,11 +1,35 @@
 import getpass
 import os
+from enum import Enum
 
+import grequests
+import httpx
 from aiogram.types import KeyboardButton
 
 import dotenv
 
 dotenv.load_dotenv(".env")
+
+
+class WorkingMode(Enum):
+    """
+    Режим работы бота. Доступно 2 подхода:
+
+    SYNC - Синхронный режим работы. Поддержка приостановлена на модуле grequests и в настоящий момент не рекомендуется
+    ASYNC - Асинхронный режим работы с помощью httpx.
+    """
+    SYNC = grequests.Session  # DEPRECATED
+    ASYNC = httpx.AsyncClient
+
+
+class LoggingLevel(Enum):
+    """
+    Уровень логгирования
+    """
+    TRACE = "TRACE"
+    WARNING = "WARNING"
+    DEBUG = "DEBUG"
+
 
 # PUT YOUR API_KEY FOR TELEGRAM BOT TO .env FILE. YOUR .env SHOULD LOOK LIKE THIS: API_KEY=YOUR_KEY
 API_KEY = os.environ["API_KEY"]

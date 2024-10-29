@@ -6,7 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/grsu-venv/Lib" />
       <excludeFolder url="file://$MODULE_DIR$/grsu-venv/Scripts" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (notify_grsu)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
