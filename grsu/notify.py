@@ -45,15 +45,14 @@ async def notify(client: httpx.AsyncClient) -> None:
             first_tasks.append(login_task)
 
     while first_tasks:
-        loop = asyncio.get_event_loop()
-        done, first_tasks = loop.run_until_complete(asyncio.wait(
+        done, pending = await asyncio.wait(
             first_tasks, return_when=asyncio.FIRST_COMPLETED
-        ))
+        )
         for task in done:
             logger.info(f"Выполнена асинхронная задача: {task.get_name()}")
-            logger.debug("Может возникнуть далее ошибка из-за .get_name(), что странно")
             if task.get_name() == "raw_schedule":
                 result = await task
                 group_id = task.group_id
                 db_schedule = schedule.get_schedule_from_db(group_id=group_id)
                 # new_lessons, deleted_lessons, real_deleted_lessons = self.get_api_changes(group)
+            first_tasks = list(pending)
