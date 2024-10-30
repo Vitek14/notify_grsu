@@ -19,7 +19,7 @@ class AboutMixin:
         # cookies = session.cookie_jar.filter_cookies('https://edu.grsu.by')
         cookies = client.cookies
         logger.debug(f"Cookies: {cookies}")
-        logger.debug(f"LOGIN WEB TEXT: {before_html}")
+        # logger.debug(f"LOGIN WEB TEXT: {before_html}")
         authstate = before_html.split('name="AuthState" value="')[1].split('"')[0]
 
         data = {
@@ -48,9 +48,9 @@ class AboutMixin:
 
         logger.warning("Может возникнуть ошибка из-за того что куки получаются из запроса, а не сессии")
         # cookies = auth_result.cookies.get_dict()
-        cookies = auth_result.cookies
+        cookies = client.cookies
         logger.debug(f"COOKIES: {cookies}")
-        logger.debug(f"AUTH RESULT TEXT: {auth_result.text}")
+        # logger.debug(f"AUTH RESULT TEXT: {auth_result.text}")
         login_dict = {
             "MDL_SSP_AuthToken": cookies["MDL_SSP_AuthToken"],
             "MDL_SSP_SessID": cookies["MDL_SSP_SessID"],
