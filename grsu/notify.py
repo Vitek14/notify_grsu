@@ -1,6 +1,7 @@
 import asyncio
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession  # Странно работает, переход на httpx
+import httpx
 from loguru import logger
 from grsu.schedule import Schedule
 from grsu.student import Student
@@ -14,7 +15,7 @@ async def process_student(id: int):
     pass
 
 
-async def notify(session: ClientSession) -> None:
+async def notify(client: httpx.AsyncClient) -> None:
     """
     Асинхронная функция уведомления. Пробежится по каждому зарегистрированному пользователю(параллельно) и будет
     сравнивать полученное расписание из базы данных с новым.
@@ -26,7 +27,7 @@ async def notify(session: ClientSession) -> None:
     first_tasks = []  # Задачи с расписанием и логином, которые пустим в асинхронность
     for group in groups_ids:
         schedule_task = asyncio.create_task(
-                schedule.async_get_raw_schedule(group, session), name="raw_schedule"
+                schedule.async_get_raw_schedule(group, client), name="raw_schedule"
             )
         schedule_task.group_id = group
         # first_tasks.append()
@@ -38,7 +39,7 @@ async def notify(session: ClientSession) -> None:
                 student.async_auth(
                     login["username"],
                     login["password"],
-                    session
+                    client
                 ), name="login_task"
             )
             first_tasks.append(login_task)

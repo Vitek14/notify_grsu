@@ -10,6 +10,8 @@ from datetime import datetime
 from datetime import timedelta
 
 # Импорт функций
+import httpx
+
 from functions.auth import auth
 from functions.select_info import select_auth_info, get_attestation
 from grsu.exceptions import *
@@ -47,6 +49,8 @@ logger.add("debug.log", format="{time} {level} {message}", level="DEBUG", rotati
 
 # Добавляем обработчик для вывода сообщений об ошибках в консоль
 logger.add(sys.stderr, level=logging_level)
+
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Устанавливаем русскую локализацию
 if not sys.getdefaultencoding() == "utf-8":
@@ -573,9 +577,9 @@ class MyHandler(ErrorHandler):
 
 async def start():
     print("Бот готов к работе")
-    # async with ClientSession() as session:
-    job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
-    # job = scheduler.add_job(notify, "interval", seconds=10, args=[session])  # Доделать
+    # async with httpx.AsyncClient() as client:
+    # job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
+    # job = scheduler.add_job(notify, "interval", seconds=10, args=[client])  # Доделать
     scheduler.start()
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 
 from aiohttp import ClientResponse
+import httpx
 from aiohttp.client import ClientSession
 from ..exceptions import ScheduleNotFound
 
@@ -16,7 +17,7 @@ class AsyncWebScheduleMixin:
     """
 
     @staticmethod
-    async def async_get_raw_schedule(group_id: int, session: ClientSession) -> ClientResponse:
+    async def async_get_raw_schedule(group_id: int, client: httpx.AsyncClient) -> httpx.Response:
         current_date = datetime.today()
         two_weeks_ago = current_date - timedelta(weeks=2)
         two_month_after = current_date + timedelta(weeks=9)
@@ -25,7 +26,7 @@ class AsyncWebScheduleMixin:
         week_ago_formatted = two_weeks_ago.strftime("%d.%m.%Y")
 
             # Если нет определённой лабораторной группы у студента(None)
-        group_schedule = await session.get(
+        group_schedule = await client.get(
             f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={group_id}&dateStart="
             f"{week_ago_formatted}&dateEnd={month_after_formatted}&lang=ru_RU"
         )

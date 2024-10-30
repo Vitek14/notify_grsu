@@ -67,13 +67,13 @@ class Student(Base, Mixin, ParseMixin, AboutMixin):
 
         # Объявляем объект сессии
         print("Обновление токена")
-        with Session() as session:
+        with Session(engine) as session:
             session.execute(update(Student).where(Student.tg_id == tg_id).values(new_token))
             session.commit()
 
     @staticmethod
     def check_if_exists(user_id: int) -> bool:
-        with Session() as session:
+        with Session(engine) as session:
             student_exist = session.query(Student).filter_by(tg_id=user_id).first()
             if student_exist:
                 return True

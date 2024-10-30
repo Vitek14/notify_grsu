@@ -1,6 +1,7 @@
 import grequests
 import json
 
+import httpx
 from aiohttp import ClientSession
 from loguru import logger
 
@@ -9,13 +10,14 @@ from ..exceptions import InvalidCredentialsError, WebsiteConnectionError
 
 class AboutMixin:
     @staticmethod
-    async def async_auth(login: str, password: str, session: ClientSession) -> dict:
+    async def async_auth(login: str, password: str, client: httpx.AsyncClient) -> dict:
         # Получаем токен
-        before_auth_page = await session.get('https://edu.grsu.by/login')
-        if before_auth_page.status != 200:
-            raise Exception(f"Failed to load login page, status code: {before_auth_page.status}")
-        before_html = await before_auth_page.text()
-        cookies = session.cookie_jar.filter_cookies('https://edu.grsu.by')
+        before_auth_page = await client.get('https://edu.grsu.by/login', follow_redirects=True)
+        if before_auth_page.status_code != 200:
+            raise Exception(f"Failed to load login page, status code: {before_auth_page.status_code}")
+        before_html = before_auth_page.text
+        # cookies = session.cookie_jar.filter_cookies('https://edu.grsu.by')
+        cookies = client.cookies
         logger.debug(f"Cookies: {cookies}")
         logger.debug(f"LOGIN WEB TEXT: {before_html}")
         authstate = before_html.split('name="AuthState" value="')[1].split('"')[0]
@@ -26,24 +28,29 @@ class AboutMixin:
             "AuthState": authstate
         }
 
-        response = await session.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data)
+        response = await client.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data,
+                                     follow_redirects=True)
         # old_cookies = await session.cookies.get_dict()
 
         # Пытаемся найти значение токена пользователя, иначе возвращаем ошибку!
         try:
-            samlresponse_raw = await response.text()
+            samlresponse_raw = response.text
             samlresponse = samlresponse_raw.split('name="SAMLResponse" value="')[1].split('"')[0]
+            logger.debug(f"SAML RESPONSE: {samlresponse}")
         except IndexError:
             raise InvalidCredentialsError
 
         # Логинимся, используя токен
-        auth_result = await session.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
+        auth_result = await client.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
             "SAMLResponse": samlresponse,
             "RelayState": "https://edu.grsu.by/login/index.php"
-        })
+        }, follow_redirects=True)
 
         logger.warning("Может возникнуть ошибка из-за того что куки получаются из запроса, а не сессии")
-        cookies = auth_result.cookies.get_dict()
+        # cookies = auth_result.cookies.get_dict()
+        cookies = auth_result.cookies
+        logger.debug(f"COOKIES: {cookies}")
+        logger.debug(f"AUTH RESULT TEXT: {auth_result.text}")
         login_dict = {
             "MDL_SSP_AuthToken": cookies["MDL_SSP_AuthToken"],
             "MDL_SSP_SessID": cookies["MDL_SSP_SessID"],
