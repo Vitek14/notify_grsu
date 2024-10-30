@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from aiohttp import ClientResponse
 import httpx
+from loguru import logger
 from aiohttp.client import ClientSession
 from ..exceptions import ScheduleNotFound
 
@@ -18,6 +19,7 @@ class AsyncWebScheduleMixin:
 
     @staticmethod
     async def async_get_raw_schedule(group_id: int, client: httpx.AsyncClient) -> httpx.Response:
+        logger.info(f"Получение асинхронно расписания.")
         current_date = datetime.today()
         two_weeks_ago = current_date - timedelta(weeks=2)
         two_month_after = current_date + timedelta(weeks=9)
@@ -25,12 +27,14 @@ class AsyncWebScheduleMixin:
         month_after_formatted = two_month_after.strftime("%d.%m.%Y")
         week_ago_formatted = two_weeks_ago.strftime("%d.%m.%Y")
 
-            # Если нет определённой лабораторной группы у студента(None)
+        # Если нет определённой лабораторной группы у студента(None)
+        logger.info("Отправление запроса на расписание")
         group_schedule = await client.get(
             f"https://api.grsu.by/1.x/app1/getGroupSchedule?groupId={group_id}&dateStart="
             f"{week_ago_formatted}&dateEnd={month_after_formatted}&lang=ru_RU"
         )
 
+        logger.debug(group_schedule.text)
         # responses = await asyncio.gather(*requests)
         return group_schedule
 

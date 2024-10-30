@@ -11,7 +11,9 @@ from ..exceptions import InvalidCredentialsError, WebsiteConnectionError
 class AboutMixin:
     @staticmethod
     async def async_auth(login: str, password: str, client: httpx.AsyncClient) -> dict:
+        logger.info("Выполнение асинхронного входа")
         # Получаем токен
+        logger.info("Отправление запроса GET на сайт с логином")
         before_auth_page = await client.get('https://edu.grsu.by/login', follow_redirects=True)
         if before_auth_page.status_code != 200:
             raise Exception(f"Failed to load login page, status code: {before_auth_page.status_code}")
@@ -19,7 +21,7 @@ class AboutMixin:
         # cookies = session.cookie_jar.filter_cookies('https://edu.grsu.by')
         cookies = client.cookies
         logger.debug(f"Cookies: {cookies}")
-        # logger.debug(f"LOGIN WEB TEXT: {before_html}")
+        logger.debug(f"LOGIN WEB TEXT: {before_html}")
         authstate = before_html.split('name="AuthState" value="')[1].split('"')[0]
 
         data = {
@@ -28,6 +30,7 @@ class AboutMixin:
             "AuthState": authstate
         }
 
+        logger.info("Отправление запроса POST непосредственно на логин")
         response = await client.post('https://idp.grsu.by/simplesaml/module.php/core/loginuserpass.php', data=data,
                                      follow_redirects=True)
         # old_cookies = await session.cookies.get_dict()
@@ -41,6 +44,7 @@ class AboutMixin:
             raise InvalidCredentialsError
 
         # Логинимся, используя токен
+        logger.info(f"Отправление запроса POST на логин используя токен")
         auth_result = await client.post("https://edu.grsu.by/auth/saml2/sp/saml2-acs.php/edu.grsu.by", data={
             "SAMLResponse": samlresponse,
             "RelayState": "https://edu.grsu.by/login/index.php"
