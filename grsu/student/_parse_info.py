@@ -1,6 +1,7 @@
 import grequests
 import json
 
+import httpx
 from aiohttp import ClientSession
 from loguru import logger
 from sqlalchemy import create_engine
@@ -21,75 +22,58 @@ class ParseMixin:
     """
     Класс обёртка
     """
-
     @staticmethod
-    async def async_get_about(token_info: dict, session: ClientSession) -> dict:
-        """
-        Получение базовых данных о студенте, включая его ФИО, курс и т.д в асинхронном режиме.
-        :param session: Сессия aiohttp.
-        :param token_info: Словарь, в котором имеются данные для аутентификации, включая MDL_SSP_AuthToken и другие.
-        :return:
-        """
-        # async with session:
-        async with session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
-            "method": "getEmployeesData"
-        }, cookies=token_info) as info_about_student:
-            logger.debug(f"Код employees_data: {info_about_student.status}")
-            if info_about_student.status != 200:
-                logger.warning(f"https://edu.grsu.by/custom-components/custom-api/ajax-router.php выдала код "
-                               f"{info_about_student.status}")
-            text = await info_about_student.text()
-            info = json.loads(text)
-        return info
-
-    @staticmethod
-    async def get_skips(token_info: dict, session: ClientSession) -> list[dict]:
+    async def async_get_skips(token_info: dict, client: httpx.AsyncClient) -> list[dict]:
         """
         Получение пропусков студента в асинхронном режиме.
-        :param session: Сессия aiohttp.
+        :param client: Асинхронный клиент httpx.
         :param token_info: Словарь, в котором имеются данные для аутентификации, включая MDL_SSP_AuthToken и другие.
         :return: Лист из словарей с информацией о пропусках
         """
-        async with session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+        skips_request = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
             "method": "getSkips",
             "args": "production"
-        }, cookies=token_info) as skips_info:
-            text = await skips_info.text()
-            info = json.loads(text)
-            logger.debug(f"SKIPS_INFO: {skips_info}")
-        return info
+        }, cookies=token_info)
+        text = skips_request.text
+        skips = json.loads(text)
+        logger.debug(f"SKIPS_INFO: {skips}")
+        return skips
 
     @staticmethod
-    async def get_attestation(token_info: dict, session: ClientSession) -> list[dict]:
+    async def async_get_attestation(token_info: dict, client: httpx.AsyncClient) -> list[dict]:
         """
         Получение промежуточной аттестации студента в асинхронном режиме.
-        :param session: Сессия aiohttp.
+        :param client: Клиент httpx.
         :param token_info: Словарь, в котором имеются данные для аутентификации, включая MDL_SSP_AuthToken и другие.
         :return: Лист из словарей с информацией о промежуточной аттестацией
         """
-        async with session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+        logger.info("Отправление запроса на промежуточную аттестацию")
+        attestation_request = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
             "method": "getAttestation"
-        }, cookies=token_info) as attestation_request:
-            text = await attestation_request.text()
-            attestation_info = json.loads(text)
-            logger.debug(f"ATTESTATION INFO: {attestation_info}")
+        }, cookies=token_info)
+        logger.success("Получен ответ от промежуточной аттестации")
+        text = attestation_request.text
+        attestation_info = json.loads(text)
+        logger.debug(f"ATTESTATION INFO: {attestation_info}")
         return attestation_info
 
     @staticmethod
-    async def get_exams(token_info: dict, session: ClientSession) -> list[dict]:
+    async def async_get_exams(token_info: dict, client: httpx.AsyncClient) -> list[dict]:
         """
         Получение промежуточной аттестации студента в асинхронном режиме.
-        :param session: Сессия aiohttp.
+        :param client: Клиент httpx
         :param token_info: Словарь, в котором имеются данные для аутентификации, включая MDL_SSP_AuthToken и другие.
         :return: Лист из словарей с информацией об экзаменах
         """
-        async with session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+        logger.info("Отправление запроса на получение экзаменов")
+        exams_request = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
             "method": "getProgress",
             "args": "production"
-        }, cookies=token_info) as exams_request:
-            text = await exams_request.text()
-            exams_info = json.loads(text)
-            logger.debug(f"EXAMS INFO: {exams_info}")
+        }, cookies=token_info)
+        logger.success("Получен ответ от экзаменов")
+        text = exams_request.text
+        exams_info = json.loads(text)
+        logger.debug(f"EXAMS INFO: {exams_info}")
         return exams_info
 
     @staticmethod
