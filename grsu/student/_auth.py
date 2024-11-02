@@ -110,6 +110,51 @@ class AboutMixin:
             return login_dict
 
     @staticmethod
+    async def async_about(cookies: dict, client: httpx.AsyncClient) -> dict:
+        """
+        Асинхронное получение информации о студенте
+        :param client: Клиент httpx
+        :param cookies: Куки файлы авторизации
+        :return:
+        """
+        logger.info("Отправление запроса на получение основных данных студента")
+        info_about_student = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+                "method": "getEmployeesData"
+            }, cookies=cookies)
+        logger.success("Получены основные данные о студенте")
+
+        json_info = json.loads(info_about_student.text)
+        useful_info = json_info["userInfo"]
+
+        # Сохраняем tabnum и язык
+        TABNUM = json_info["tabnum"]
+        LANG = useful_info["LANG"]
+
+        logger.info("Отправка запроса на получение групп студента")
+        groups_info = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+            "method": "getGroups"
+        }, cookies=cookies)
+        logger.success("Получены группы студента")
+
+        cookies["tabnum"] = TABNUM
+        cookies["lang"] = LANG
+
+        groups_info_json = json.loads(groups_info.text)
+
+        # Ищем группу и добавляем туда пользователя
+        group_ids = [0, 0, 0, 0, 0, 0]
+        for group in groups_info_json:
+            current_group_id = group["GROUPINFO"]["K_SGRYP"]
+            current_group_index = groups_info_json.index(group)
+            for user in group["LIST"]:
+                if TABNUM == user["TAB_NUM"]:  # Если студент и правда есть в этой группе, то выполняется это условие
+                    group_ids[current_group_index] = current_group_id
+                    name = f"group_{current_group_index}"
+                    cookies[name] = current_group_id
+        return cookies
+
+
+    @staticmethod
     def about(cookies: dict) -> dict:
         with grequests.Session() as session:
 

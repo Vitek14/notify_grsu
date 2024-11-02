@@ -44,6 +44,7 @@ async def notify(client: httpx.AsyncClient) -> None:
             )
             first_tasks.append(login_task)
 
+    student_tasks = []
     while first_tasks:
         done, pending = await asyncio.wait(
             first_tasks, return_when=asyncio.FIRST_COMPLETED
@@ -52,7 +53,43 @@ async def notify(client: httpx.AsyncClient) -> None:
             logger.info(f"Выполнена асинхронная задача: {task.get_name()}")
             if task.get_name() == "raw_schedule":
                 result = await task
+                logger.debug(f"TASK RESULT: {result}")
                 group_id = task.group_id
                 db_schedule = schedule.get_schedule_from_db(group_id=group_id)
                 # new_lessons, deleted_lessons, real_deleted_lessons = self.get_api_changes(group)
+            if task.get_name() == "login_task":
+                result = await task
+
+                # Теперь выполняем основные запросы со студентом
+                student_tasks.append(
+                    asyncio.create_task(
+                        student.async_about(result, client), name="about"
+                    )
+                )
+                student_tasks.append(
+                    asyncio.create_task(
+                        student.async_get_skips(result, client), name="skips"
+                    )
+                )
+                student_tasks.append(
+                    asyncio.create_task(
+                        student.async_get_exams(result, client), name="get_exams"
+                    )
+                )
+                student_tasks.append(
+                    asyncio.create_task(
+                        student.async_get_attestation(result, client), name="get_attestation"
+                    )
+                )
+                while student_tasks:  # Переделать?
+                    done_student, pending_student = await asyncio.wait(
+                        student_tasks, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for student_task in done_student:
+                        st_task = await student_task
+                        logger.info(f"Выполнена асинхронная задача: {student_task.get_name()}")
+                    student_tasks = list(pending_student)
+                logger.debug(f"TASK RESULT: {result}")
+
             first_tasks = list(pending)
+    # logger.debug(f"DONE: {done}")
