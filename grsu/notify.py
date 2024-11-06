@@ -5,10 +5,12 @@ import httpx
 from loguru import logger
 from grsu.schedule import Schedule
 from grsu.student import Student
+from grsu.student.marks import Marks
 # from asyncio import loo
 
 schedule = Schedule()
 student = Student()
+marks = Marks()
 
 
 async def process_student(id: int):
@@ -79,6 +81,11 @@ async def notify(client: httpx.AsyncClient) -> None:
                 student_tasks.append(
                     asyncio.create_task(
                         student.async_get_attestation(result, client), name="get_attestation"
+                    )
+                )
+                student_tasks.append(
+                    asyncio.create_task(
+                        marks.async_get_courses_names(result, client)
                     )
                 )
                 while student_tasks:  # Переделать?

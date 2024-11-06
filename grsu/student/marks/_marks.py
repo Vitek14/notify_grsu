@@ -1,6 +1,9 @@
 import re
 import grequests
 import json
+
+import httpx
+from loguru import logger
 from sqlalchemy import select, delete, insert
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
@@ -24,8 +27,21 @@ class MarksWebMixin:
     """
 
     @staticmethod
-    async def a_get_courses_names(cookies: dict):
-        pass
+    async def async_get_courses_names(cookies: dict, client: httpx.AsyncClient) -> dict:
+        """
+        Получает асинхронно названия предметов
+        :param cookies: Информация об авторизации
+        :param client: Клиент httpx
+        :return: Словарь с названиями предметов
+        """
+        logger.info("Отправление запроса на получения названий предметов")
+        all_courses = await client.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
+            "method": "getCoursesData"
+        }, cookies=cookies)
+        logger.success("Информация о названиях предметов получена")
+        all_courses_json = json.loads(all_courses.text)["1"]["2"]
+        logger.debug(f"COURSES: {all_courses_json}")
+        return all_courses_json
 
 def get_courses_data(self, user_id: int, cookies: dict):
     with grequests.Session() as session:
