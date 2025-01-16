@@ -577,13 +577,12 @@ class MyHandler(ErrorHandler):
 
 async def start():
     print("Бот готов к работе")
-    async with httpx.AsyncClient() as client:
     # job = scheduler.add_job(schedule.notify, "interval", minutes=schedule_check_interval, args=[bot])
-        job = scheduler.add_job(notify, "interval", seconds=30, args=[client])  # Доделать
-        scheduler.start()
-        dp.startup.register(on_startup)
-        dp.shutdown.register(on_shutdown)
-        await dp.start_polling(bot)
+    job = scheduler.add_job(notify, "interval", seconds=30)  # Доделать
+    scheduler.start()
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
