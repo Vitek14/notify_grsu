@@ -43,6 +43,7 @@ class MarksWebMixin:
         logger.debug(f"COURSES: {all_courses_json}")
         return all_courses_json
 
+
 def get_courses_data(self, user_id: int, cookies: dict):
     with grequests.Session() as session:
         all_courses = session.post("https://edu.grsu.by/custom-components/custom-api/ajax-router.php", data={
@@ -50,6 +51,7 @@ def get_courses_data(self, user_id: int, cookies: dict):
         }, cookies=cookies)
         all_courses_json = json.loads(all_courses.text)["1"]["2"]
         return all_courses_json
+
 
 def get_courses_names(self, all_courses: list) -> list:
     course_names = []
